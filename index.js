@@ -61,8 +61,12 @@ MpdClient.prototype.receive = function(data) {
       var err_code = str.match(/\[(.*?)\]/)
       var err_cmd = str.match(/{(.*?)}/)
 
-      if(err_code && err_code.length > 1)
-        err.err_code = err_code[1]
+      if(err_code && err_code.length > 1) {
+        err_code = err_code[1].split('@')
+        err.err_code = parseInt(err_code[0])
+        err.err_list_num = parseInt(err_code[1])
+
+      }
       if(err_cmd && err_cmd.length > 1)
         err.err_cmd = err_cmd[1]
       
