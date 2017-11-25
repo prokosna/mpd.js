@@ -27,6 +27,13 @@ MpdClient.ACK_ERROR_CODES = {
   EXIST: 56
 };
 
+MpdClient.ACK_ERROR_CODES_REVERSED = Object
+  .keys(MpdClient.ACK_ERROR_CODES)
+  .reduce((memo, reason) => {
+    memo[MpdClient.ACK_ERROR_CODES[reason]] = reason
+    return memo
+  }, {})
+
 
 function MpdClient() {
   EventEmitter.call(this);
@@ -86,7 +93,10 @@ MpdClient.prototype.receive = function(data) {
       }
       if(err_cmd && err_cmd.length > 1)
         err.err_cmd = err_cmd[1]
-      
+
+      err.code = MpdClient.ACK_ERROR_CODES_REVERSED[err.err_code] || 'ERR'
+
+
       this.handleMessage(err);
     } else if (OK_MPD.test(line)) {
       this.setupIdling();
