@@ -54,6 +54,17 @@ Connects and returns a client.
 `msg`: a string which contains an MPD response.
 Returns an object.
 
+#### mpd.parseArrayMessage(msg)
+
+`msg`: a string which contains an MPD response.
+Returns an array.
+
+#### mpd.parseSongArrayMessage(msg)
+
+`msg`: a string which contains an MPD response.
+Returns an array. This should be used for parsing
+song list messages instead of `parseArrayMessage()` method.
+
 #### client.sendCommand(command, callback)
 
 `command` can be a `MpdClient.Command` or a string.

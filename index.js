@@ -10,6 +10,7 @@ MpdClient.Command = Command
 MpdClient.cmd = cmd;
 MpdClient.parseKeyValueMessage = parseKeyValueMessage;
 MpdClient.parseArrayMessage = parseArrayMessage;
+MpdClient.parseSongArrayMessage = parseSongArrayMessage;
 
 MpdClient.ACK_ERROR_CODES = {
   NOT_LIST: 1,
