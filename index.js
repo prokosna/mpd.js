@@ -237,3 +237,41 @@ function parseArrayMessage(msg) {
   results.push(obj);
   return results;
 }
+
+
+/**
+ * There is a problem with the default parseArrayMessage method
+ * when parsing song list. If mpd returns
+ * MUSICBRAINS_TRACKID: xxx
+ * for same song two times (which can be valid as it's found 2 times
+ * for the same song) then default parseArrayMessage breaks and
+ * returns corrupted entries.
+ * Since all songs begin with `file:`
+ * this one fits better for song list parsing.
+ */
+function parseSongArrayMessage(msg) {
+  let results = []
+  let obj
+
+  msg.split('\n').forEach(p => {
+    if (p.length === 0) {
+      return
+    }
+    let keyValue = p.match(/([^ ]+): (.*)/)
+    if (keyValue == null) {
+      throw new Error('Could not parse entry "' + p + '"')
+    }
+
+    let isnew = keyValue[1].toLowerCase().trim() === 'file'
+    if (isnew) {
+      if (obj) results.push(obj)
+      obj = {}
+      obj[keyValue[1]] = keyValue[2]
+    } else {
+      obj[keyValue[1]] = keyValue[2]
+    }
+  })
+
+  if (obj) results.push(obj)
+  return results
+}
