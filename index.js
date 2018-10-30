@@ -36,6 +36,54 @@ MpdClient.ACK_ERROR_CODES_REVERSED = Object
   }, {})
 
 
+class MPDError extends Error {
+
+  constructor(str, extra) {
+    super()
+    Error.captureStackTrace(this, this.constructor)
+
+    // error response:
+    // ACK [error@command_listNum] {current_command} message_text
+
+    // parse error and command_listNum
+    var err_code = str.match(/\[(.*?)\]/)
+    this.name = 'MPDError'
+
+    // safety fallback just in case
+    if (!err_code || !err_code.length) {
+      this.message = str
+
+    } else {
+      var [error, cmd_list_num] = err_code[1].split('@')
+      var current_command = str.match(/{(.*?)}/)
+      var msg = str.split('}')[1].trim()
+
+      console.log({
+        error, cmd_list_num,
+        current_command, msg
+      })
+
+      this.ack_code = MpdClient.ACK_ERROR_CODES_REVERSED[error] || '??'
+      this.ack_code_num = error|0
+      this.message = msg
+      this.cmd_list_num = cmd_list_num|0
+      this.current_command = current_command[1]
+    }
+  }
+
+  toJSON() {
+    let obj = {}
+    for (let key of Object.keys(this)) {
+      obj[key] = this[key]
+    }
+    return {
+      err: this.toString(),
+      ...obj
+    }
+  }
+
+}
+
 function MpdClient() {
   EventEmitter.call(this);
 
@@ -52,7 +100,7 @@ var defaultConnectOpts = {
 
 MpdClient.connect = function(options) {
   options = options || defaultConnectOpts;
-  
+
   var client = new MpdClient();
   client.socket = net.connect(options, function() {
     client.emit('connect');
@@ -78,28 +126,11 @@ MpdClient.prototype.receive = function(data) {
       , line = m[0]
       , code = m[1]
       , str = m[2]
+
     if (code === "ACK") {
-      var err = new Error(str);
-      
-      // add error code and cmd to
-      // the Error
-      var err_code = str.match(/\[(.*?)\]/)
-      var err_cmd = str.match(/{(.*?)}/)
-
-      if(err_code && err_code.length > 1) {
-        err_code = err_code[1].split('@')
-        err.err_code = parseInt(err_code[0])
-        err.err_list_num = parseInt(err_code[1])
-
-      }
-      if(err_cmd && err_cmd.length > 1)
-        err.err_cmd = err_cmd[1]
-
-      err.code = MpdClient.ACK_ERROR_CODES_REVERSED[err.err_code] || 'ERR'
-
-
-      this.handleMessage(err);
+      this.handleMessage(new MPDError(str))
     } else if (OK_MPD.test(line)) {
+      this.setProtoVersion(line)
       this.setupIdling();
     } else {
       this.handleMessage(null, msg);
@@ -122,6 +153,15 @@ MpdClient.prototype.setupIdling = function() {
   self.idling = true;
   self.emit('ready');
 };
+
+MpdClient.prototype.setProtoVersion = function(line) {
+  let version = line.split(OK_MPD)[1]
+  Object.defineProperty(
+    this,
+    'PROTOCOL_VERSION',
+    { get: () => version }
+  )
+}
 
 MpdClient.prototype.sendCommand = function(command, callback) {
   var self = this;

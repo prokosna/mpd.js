@@ -109,3 +109,53 @@ A system has updated. `systemName` is one of:
 #### system-*
 
 See above event. Each system name has its own event as well.
+
+### Properties
+
+#### mpd.PROTOCOL_VERSION
+
+Protocol version returned by the MPD server after connection is established
+
+#### mpd.ACK_ERROR_CODES
+
+ACK codes map, as seen here [Ack.hxx](https://github.com/MusicPlayerDaemon/MPD/blob/master/src/protocol/Ack.hxx)
+
+```js
+ACK_ERROR_CODES = {
+  NOT_LIST: 1,
+  ARG: 2,
+  PASSWORD: 3,
+  PERMISSION: 4,
+  UNKNOWN: 5,
+
+  NO_EXIST: 50,
+  PLAYLIST_MAX: 51,
+  SYSTEM: 52,
+  PLAYLIST_LOAD: 53,
+  UPDATE_ALREADY: 54,
+  PLAYER_SYNC: 55,
+  EXIST: 56
+}
+```
+
+### Error handling
+
+MPD errors are reported as
+
+```
+ACK [error@command_listNum] {current_command} message_text
+```
+
+When such error is received, it is thrown as a MPDError:
+
+```js
+MPDError {
+  err: "MPDError: <message_text>",
+  name: "MPDError",
+  ack_code: "<ACK_ERROR_CODE>", // ex: ARG
+  ack_code_num: <ACK_CODE_NUMBER>, // ex: 2 for ARG
+  message: "<message_text>",
+  cmd_list_num: <command_listNum>,
+  current_command: "<current_command>"
+}
+```
