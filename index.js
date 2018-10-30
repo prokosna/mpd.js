@@ -58,11 +58,6 @@ class MPDError extends Error {
       var current_command = str.match(/{(.*?)}/)
       var msg = str.split('}')[1].trim()
 
-      console.log({
-        error, cmd_list_num,
-        current_command, msg
-      })
-
       this.ack_code = MpdClient.ACK_ERROR_CODES_REVERSED[error] || '??'
       this.ack_code_num = error|0
       this.message = msg
