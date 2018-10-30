@@ -49,11 +49,6 @@ over MPD.
 
   Connects and returns a client.
 
-* #### mpd.disconnect(cb?)
-
-  Disconnects the client sending `close` command to the MPD server.  
-  If `cb` is omitted, promise is returned.
-
 * #### mpd.parseKeyValueMessage(msg)
 
   `msg`: a string which contains an MPD response.
@@ -68,6 +63,11 @@ over MPD.
 
   `msg`: a string which contains an MPD response.  Returns an array.  
   This should be used for parsing song list messages instead of `parseArrayMessage()` method.
+
+* #### client.disconnect(cb?)
+
+  Disconnects the client sending `close` command to the MPD server.  
+  If `cb` is omitted, promise is returned.
 
 * #### client.sendCommand(command, callback)
 
