@@ -37,62 +37,61 @@ over MPD.
 
 ## Documentation
 
-  See also the [MPD Protocol Documentation](http://www.musicpd.org/doc/protocol/).
+  See also the [MPD Protocol Documentation](https://www.musicpd.org/doc/html/protocol.html).
 
 ### Functions
 
-#### mpd.cmd(name, args)
+* #### mpd.cmd(name, args)
 
   Convert name/args pair into a Command.
 
-#### mpd.connect(options)
+* #### mpd.connect(options)
 
   Connects and returns a client.
 
-#### mpd.disconnect(cb?)
+* #### mpd.disconnect(cb?)
 
-  Disconnects the client sending `close` command to the MPD server.
+  Disconnects the client sending `close` command to the MPD server.  
   If `cb` is omitted, promise is returned.
 
-#### mpd.parseKeyValueMessage(msg)
+* #### mpd.parseKeyValueMessage(msg)
 
   `msg`: a string which contains an MPD response.
   Returns an object.
 
-#### mpd.parseArrayMessage(msg)
+* #### mpd.parseArrayMessage(msg)
 
   `msg`: a string which contains an MPD response.
   Returns an array.
 
-#### mpd.parseSongArrayMessage(msg)
+* #### mpd.parseSongArrayMessage(msg)
 
-  `msg`: a string which contains an MPD response.
-  Returns an array. This should be used for parsing
-  song list messages instead of `parseArrayMessage()` method.
+  `msg`: a string which contains an MPD response.  Returns an array.  
+  This should be used for parsing song list messages instead of `parseArrayMessage()` method.
 
-#### client.sendCommand(command, callback)
+* #### client.sendCommand(command, callback)
 
   `command` can be a `MpdClient.Command` or a string.
 
-#### client.sendCommands(commandList, callback)
+* #### client.sendCommands(commandList, callback)
 
 ### Events
 
-#### error(err)
+* #### error(err)
 
-#### end
+* #### end
 
   The connection is closed.
 
-#### connect
+* #### connect
 
   A socket connection has been made.
 
-#### ready
+* #### ready
 
   The mpd server is ready to accept commands.
 
-#### system(systemName)
+* #### system(systemName)
 
   A system has updated. `systemName` is one of:
 
@@ -111,17 +110,17 @@ over MPD.
   * `message` - a message was received on a channel this client is subscribed
     to; this event is only emitted when the queue is empty
 
-#### system-*
+* #### system-*
 
   See above event. Each system name has its own event as well.
 
 ### Properties
 
-#### mpd.PROTOCOL_VERSION
+* #### mpd.PROTOCOL_VERSION
 
   Protocol version returned by the MPD server after connection is established
 
-#### mpd.ACK_ERROR_CODES
+* #### mpd.ACK_ERROR_CODES
 
   ACK codes map, as seen here [Ack.hxx](https://github.com/MusicPlayerDaemon/MPD/blob/master/src/protocol/Ack.hxx)
 
