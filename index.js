@@ -154,7 +154,7 @@ MpdClient.prototype.setProtoVersion = function(line) {
   Object.defineProperty(
     this,
     'PROTOCOL_VERSION',
-    { get: () => version }
+    { get: () => this.socket.destroyed ? undefined : version }
   )
 }
 
@@ -208,6 +208,48 @@ MpdClient.prototype.sendWithCallback = function(cmd, cb) {
 MpdClient.prototype.send = function(data) {
   this.socket.write(data);
 };
+
+
+/**
+ * Send disconnect command to the MPD server
+ * and wait until connection is closed.
+ *
+ * if `cb` is omitted, promise is returned
+ */
+MpdClient.prototype.disconnect = function(cb) {
+
+  var promise
+
+  if (typeof cb !== 'function') {
+    promise = new Promise((resolve, reject) => {
+      cb = resolve
+    })
+  }
+
+  let self = this
+
+  if (this.socket.destroyed) {
+    cb()
+    return
+  }
+
+  // force close if needed
+  let ftid = setTimeout(function () {
+    if (self.socket.destroyed) {
+      return
+    }
+    self.socket.destroy()
+  }, 4000)
+
+  this.socket.once('end', () => {
+    clearTimeout(ftid)
+    cb()
+  })
+
+  this.sendWithCallback('close')
+
+  return promise
+}
 
 function Command(name, args) {
   this.name = name;
