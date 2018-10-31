@@ -220,6 +220,7 @@ MpdClient.prototype.disconnect = function(cb) {
   let self = this
 
   var promise
+  var ftid
 
   if (typeof cb !== 'function') {
     promise = new Promise((resolve, reject) => {
@@ -241,7 +242,7 @@ MpdClient.prototype.disconnect = function(cb) {
   }
 
   // force close if needed
-  let ftid = setTimeout(function () {
+  ftid = setTimeout(function () {
     if (self.socket.destroyed) {
       return
     }
