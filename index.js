@@ -217,6 +217,7 @@ MpdClient.prototype.send = function(data) {
  * if `cb` is omitted, promise is returned
  */
 MpdClient.prototype.disconnect = function(cb) {
+  let self = this
 
   var promise
 
@@ -226,11 +227,17 @@ MpdClient.prototype.disconnect = function(cb) {
     })
   }
 
-  let self = this
+  var notifyClosed = () => {
+    clearTimeout(ftid)
+    cb()
+    // noop all other calls
+    notifyClosed = () => {}
+  }
+
 
   if (this.socket.destroyed) {
-    cb()
-    return
+    setTimeout(notifyClosed, 0)
+    return promise
   }
 
   // force close if needed
@@ -241,12 +248,16 @@ MpdClient.prototype.disconnect = function(cb) {
     self.socket.destroy()
   }, 4000)
 
-  this.socket.once('end', () => {
-    clearTimeout(ftid)
-    cb()
-  })
+  this.socket.once('close', notifyClosed)
+  this.socket.once('end', notifyClosed)
 
-  this.sendWithCallback('close')
+  // if we're connected; meaning we can write and are not in `connecting` state
+  // then send the `close` command to the server
+  if (this.socket.writable && !this.socket.connecting) {
+    this.sendWithCallback('close')
+  } else {
+    this.socket.destroy()
+  }
 
   return promise
 }
