@@ -206,6 +206,7 @@ MpdClient.prototype.sendWithCallback = function(cmd, cb) {
 };
 
 MpdClient.prototype.send = function(data) {
+  console.log('sending', data)
   this.socket.write(data);
 };
 
@@ -220,7 +221,6 @@ MpdClient.prototype.disconnect = function(cb) {
   let self = this
 
   var promise
-  var ftid
 
   if (typeof cb !== 'function') {
     promise = new Promise((resolve, reject) => {
@@ -229,7 +229,6 @@ MpdClient.prototype.disconnect = function(cb) {
   }
 
   var notifyClosed = () => {
-    clearTimeout(ftid)
     cb()
     // noop all other calls
     notifyClosed = () => {}
@@ -241,24 +240,13 @@ MpdClient.prototype.disconnect = function(cb) {
     return promise
   }
 
-  // force close if needed
-  ftid = setTimeout(function () {
-    if (self.socket.destroyed) {
-      return
-    }
-    self.socket.destroy()
-  }, 4000)
-
   this.socket.once('close', notifyClosed)
   this.socket.once('end', notifyClosed)
 
-  // if we're connected; meaning we can write and are not in `connecting` state
-  // then send the `close` command to the server
-  if (this.socket.writable && !this.socket.connecting) {
-    this.sendWithCallback('close')
-  } else {
+  this.socket.end()
+  setTimeout(() => {
     this.socket.destroy()
-  }
+  }, 16)
 
   return promise
 }
