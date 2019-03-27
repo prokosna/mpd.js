@@ -7,27 +7,83 @@ var EventEmitter = require('events').EventEmitter
 
 module.exports = MpdClient;
 MpdClient.Command = Command
+/**
+ * Convenience method to construct a new [Command]{@link MPDClient.Command}
+ * @memberof MPDClient
+ * @function
+ * @param {String} name command name
+ * @param {Array<String>} args extra arguments
+ * @returns {Command} new Command(name, args);
+ */
 MpdClient.cmd = cmd;
+
+/**
+ * Parse MPD response containing a key value pairs
+ *
+ * @memberof MPDClient
+ * @function
+ * @param {String} msg MPD command result
+ * @returns {Object} with parsed key-value pairs
+ */
 MpdClient.parseKeyValueMessage = parseKeyValueMessage;
+
+/**
+ * Parse MPD list response
+ *
+ * @memberof MPDClient
+ * @function
+ * @param {String} msg MPD command result
+ * @returns {Array<Object>}
+ */
 MpdClient.parseArrayMessage = parseArrayMessage;
+
+/**
+ * Same as parseArrayMessage but ment for songs
+ *
+ * @memberof MPDClient
+ * @function
+ * @param {String} msg MPD command result
+ * @returns {Array<Object>}
+ */
 MpdClient.parseSongArrayMessage = parseSongArrayMessage;
 
+/**
+ * @enum {Number}
+ * @memberof MPDClient
+ *
+ */
 MpdClient.ACK_ERROR_CODES = {
+  /** 1 */
   NOT_LIST: 1,
+  /** 2 */
   ARG: 2,
+  /** 3 */
   PASSWORD: 3,
+  /** 4 */
   PERMISSION: 4,
+  /** 5 */
   UNKNOWN: 5,
 
+  /** 50 */
   NO_EXIST: 50,
+  /** 51 */
   PLAYLIST_MAX: 51,
+  /** 52 */
   SYSTEM: 52,
+  /** 53 */
   PLAYLIST_LOAD: 53,
+  /** 54 */
   UPDATE_ALREADY: 54,
+  /** 55 */
   PLAYER_SYNC: 55,
+  /** 56 */
   EXIST: 56
 };
 
+/**
+ * @memberof MPDClient
+ * @member {Object}
+ */
 MpdClient.ACK_ERROR_CODES_REVERSED = Object
   .keys(MpdClient.ACK_ERROR_CODES)
   .reduce((memo, reason) => {
@@ -79,6 +135,64 @@ class MPDError extends Error {
 
 }
 
+/**
+ * @classdesc A MPD client class
+ *
+ *  MPD protocol reports errors as:
+ *  ```
+ *  ACK [error@command_listNum] {current_command} message_text
+ *  ```
+ * When such error is received, it is thrown as a MPDError:
+ *
+ * ```js
+ * MPDError {
+ *   err: "MPDError: <message_text>",
+ *   name: "MPDError",
+ *   ack_code: "<ACK_ERROR_CODE>", // ex: ARG
+ *   ack_code_num: <ACK_CODE_NUMBER>, // ex: 2 for ARG
+ *   message: "<message_text>",
+ *   cmd_list_num: <command_listNum>,
+ *   current_command: "<current_command>"
+ * }
+ * ```
+ *
+ * Fires these events:
+ * ```js
+ * 'error'
+ * 'end' // the connection is closed
+ * 'connect' // a socket connection has been made
+ * 'ready' // the mpd server is ready to accept commands
+ *
+ * 'system(systemName)' // A system has updated. systemName is one of:
+ *
+ *    // database         the song database has been modified after update
+ *    // update           a database update has started or finished.
+ *                        If the database was modified during the update,
+ *                        the database event is also emitted
+ *    // stored_playlist  a stored playlist has been modified, renamed,
+ *                        created or deleted
+ *    // playlist         the current playlist has been modified
+ *    // player           the player has been started, stopped or seeked
+ *    // mixer            the volume has been changed
+ *    // output           an audio output has been enabled or disabled
+ *    // options          options like repeat, random, crossfade, replay gain
+ *    // sticker          the sticker database has been modified
+ *    // subscription     a client has subscribed or unsubscribed to a channel
+ *    // message          a message was received on a channel this client is 
+ *                        subscribed to; this event is only emitted when the queue is empty
+ *
+ *  'system-*' // See above event. Each system name has its own event as well.
+ * ```
+ *
+ * @class
+ * @name MPDClient
+ * @extends {events.EventEmitter}
+ * @constructor
+ * @property {String} PROTOCOL_VERSION version of protocol used
+ * @property {Socket} socket
+ *  {@link https://nodejs.org/api/net.html#net_class_net_socket a nodejs socket}
+ *
+ */
 function MpdClient() {
   EventEmitter.call(this);
 
@@ -93,10 +207,25 @@ var defaultConnectOpts = {
   port: 6600
 }
 
+/**
+ * Connects to a MPD server
+ *
+ * @returns {MPDClient}
+ * @param {Object?} options options to 
+ *  [connect to a socket]{@link https://nodejs.org/api/net.html#net_socket_connect_options_connectlistener}
+ * @memberof MPDClient
+ */
 MpdClient.connect = function(options) {
   options = options || defaultConnectOpts;
 
   var client = new MpdClient();
+
+  /**
+   * @member {Socket}
+   * @name socket
+   * @memberof MPDClient
+   * @see {@link https://nodejs.org/api/net.html#net_class_net_socket}
+   */
   client.socket = net.connect(options, function() {
     client.emit('connect');
   });
@@ -158,6 +287,15 @@ MpdClient.prototype.setProtoVersion = function(line) {
   )
 }
 
+/**
+ * Send a command to the MPD server
+ *
+ * @memberof MPDClient
+ * @name MPDClient#sendCommand
+ * @function
+ * @param {Command|String}
+ * @param {Function} callback
+ */
 MpdClient.prototype.sendCommand = function(command, callback) {
   var self = this;
   callback = callback || noop.bind(this);
@@ -169,6 +307,23 @@ MpdClient.prototype.sendCommand = function(command, callback) {
   });
 };
 
+/**
+ * Send commands to the MPD server:
+ *
+ * ```
+ * command_list_begin
+ * command1
+ * command2
+ * ...
+ * command_list_end
+ * ```
+ *
+ * @memberof MPDClient
+ * @name MPDClient#sendCommands
+ * @function
+ * @param {Array<Command|String>} commandList
+ * @param {Function} callback
+ */
 MpdClient.prototype.sendCommands = function(commandList, callback) {
   var fullCmd = "command_list_begin\n" + commandList.join("\n") + "\ncommand_list_end";
   this.sendCommand(fullCmd, callback || noop.bind(this));
@@ -212,10 +367,15 @@ MpdClient.prototype.send = function(data) {
 
 
 /**
- * Send disconnect command to the MPD server
- * and wait until connection is closed.
+ * Disconnects from the MPD server.
  *
- * if `cb` is omitted, promise is returned
+ * Promisified in case if callback is omitted.
+ *
+ * @memberof MPDClient
+ * @name MPDClient#disconnect
+ * @param {Function?} cb is omitted, promise is returned
+ * @function
+ * @returns {Promise|undefined}
  */
 MpdClient.prototype.disconnect = function(cb) {
   let self = this
@@ -251,6 +411,15 @@ MpdClient.prototype.disconnect = function(cb) {
   return promise
 }
 
+/**
+ * @class
+ * @classdesc Command halper, correctly serializes commands 
+ *   to be sent to the MPD server
+ * @memberof MPDClient
+ * @constructor
+ * @param {String} name
+ * @param {Array} args
+ */
 function Command(name, args) {
   this.name = name;
   this.args = args;
@@ -326,6 +495,7 @@ function parseArrayMessage(msg) {
  * returns corrupted entries.
  * Since all songs begin with `file:`
  * this one fits better for song list parsing.
+ * @ignore
  */
 function parseSongArrayMessage(msg) {
   let results = []
