@@ -10,6 +10,7 @@ MpdClient.Command = Command
 /**
  * Convenience method to construct a new [Command]{@link MPDClient.Command}
  * @memberof MPDClient
+ * @name cmd
  * @function
  * @param {String} name command name
  * @param {Array<String>} args extra arguments
@@ -21,6 +22,7 @@ MpdClient.cmd = cmd;
  * Parse MPD response containing a key value pairs
  *
  * @memberof MPDClient
+ * @name parseKeyValueMessage
  * @function
  * @param {String} msg MPD command result
  * @returns {Object} with parsed key-value pairs
@@ -31,6 +33,7 @@ MpdClient.parseKeyValueMessage = parseKeyValueMessage;
  * Parse MPD list response
  *
  * @memberof MPDClient
+ * @name parseArrayMessage
  * @function
  * @param {String} msg MPD command result
  * @returns {Array<Object>}
@@ -40,6 +43,7 @@ MpdClient.parseArrayMessage = parseArrayMessage;
 /**
  * Same as parseArrayMessage but ment for songs
  *
+ * @name parseSongArrayMessage
  * @memberof MPDClient
  * @function
  * @param {String} msg MPD command result
@@ -52,7 +56,7 @@ MpdClient.parseSongArrayMessage = parseSongArrayMessage;
  * @memberof MPDClient
  *
  */
-MpdClient.ACK_ERROR_CODES = {
+let ACK_ERROR_CODES = {
   /** 1 */
   NOT_LIST: 1,
   /** 2 */
@@ -80,9 +84,12 @@ MpdClient.ACK_ERROR_CODES = {
   EXIST: 56
 };
 
+MpdClient.ACK_ERROR_CODES = ACK_ERROR_CODES
+
 /**
  * @memberof MPDClient
  * @member {Object}
+ * @name ACK_ERROR_CODES_REVERSED
  */
 MpdClient.ACK_ERROR_CODES_REVERSED = Object
   .keys(MpdClient.ACK_ERROR_CODES)
@@ -214,6 +221,7 @@ var defaultConnectOpts = {
  * @param {Object?} options options to 
  *  [connect to a socket]{@link https://nodejs.org/api/net.html#net_socket_connect_options_connectlistener}
  * @memberof MPDClient
+ * @name connect
  */
 MpdClient.connect = function(options) {
   options = options || defaultConnectOpts;
