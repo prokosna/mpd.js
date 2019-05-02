@@ -8,8 +8,12 @@ For higher level API module check out [mpdjs-api](https://github.com/cotko/mpdjs
 
 ### Usage
 
+  ```
+  npm / yarn install mpd2
+  ```
+
   ```js
-  const mpd = require('mpdjs')
+  const mpd = require('mpd2')
   const { cmd } = mpd
 
   // config is passed to net.connect()
