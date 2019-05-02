@@ -56,57 +56,91 @@ For higher level API module check out [mpdjs-api](https://github.com/cotko/mpdjs
 
   See also the [MPD Protocol Documentation](https://www.musicpd.org/doc/html/protocol.html).
 
-#### Functions
+#### Client methods
 
-* #### mpd.cmd(name, args)
+* #### *async* client.sendCommand(command)
+
+  `command` can be a `MpdClient.Command` or a string, use *mpd.cmd* helper to construct the Command when using arguments:
+  ```js
+  
+  await client.sendCommand(mpd.cmd('setvol', [50]))
+  
+  // args can be overloaded as well, no need to pass them as array:
+  const searched = await client.sendCommand(mpd.cmd('search', '(artist contains "Empire")', 'group', 'album'))
+  
+  ```
+
+* #### *async* client.sendCommands(commandList)
+  `commandList` will be wrapped between `command_list_begin` and `command_list_end` (see MPD documentation for more info)
+
+* #### *async* client.disconnect()
+
+  Disconnects the client.
+
+##### Static functions
+
+* #### *async* mpd.connect(options)
+
+  Connects to a MPD server and returns a client.
+  
+* #### mpd.cmd(name, [args]) or overloaded *mpd.cmd(name, ...args)*
 
   Convert name/args pair into a Command.
 
-* #### mpd.connect(options)
 
-  Connects and returns a client.
+###### Parsers
 
-* #### mpd.parseKeyValueMessage(msg)
+* #### mpd.normalizeKeys([bool])
+  Getter / setter to enable normalization of keys while parsing. MPD responses contains various keys, upper/lower/kebap cases, this setting normalizes all keys into *snake_case*.
+  
+  Turned on by default
+  
+* #### mpd.autoparseValues([bool])
+  Getter / setter to enable auto parsing of known values based on keys.
+  
+  Turned on by default
+
+* #### mpd.parseObject(msg)
 
   `msg`: a string which contains an MPD response.
   Returns an object.
 
-* #### mpd.parseArrayMessage(msg)
+* #### mpd.parseList(msg, [delimiters])
 
   `msg`: a string which contains an MPD response.
-  Returns an array.
+  `delimiters`: which keys represent distinct object types within the response
+  
+  Returns an array, see source for more info
 
-* #### mpd.parseSongArrayMessage(msg)
+* #### mpd.parseList.by(delimiters)
 
-  `msg`: a string which contains an MPD response.  Returns an array.  
-  This should be used for parsing song list messages instead of `parseArrayMessage()` method.
+  `delimiters`: a string or array of delimiters
+  
+  returns wrapped function `parser(msg)` which calls `parseList(msg, delimiters)`
+  
+  ```js
+  const songparser = mpd.parseList.by('file')
+  await client.sendCommand('listallinfo').then(songparser)
+  ```
 
-* #### client.disconnect(cb?)
+* #### mpd.parsNestedList(msg)
 
-  Disconnects the client sending `close` command to the MPD server.  
-  If `cb` is omitted, promise is returned.
+  `msg`: a string which contains an MPD response.
+  
+  Parse the list response, first item key indicates the unique key identifier, any subtiems will be nested within that object. Returns an array of parsed objects. See source for more info.
 
-* #### client.sendCommand(command, callback)
+* #### mpd.parseListAndAccumulate(msg, path)
 
-  `command` can be a `MpdClient.Command` or a string.
+  `msg`: a string which contains an MPD response.
+  `path`: array of nested objects
+  
+  Parse the list response and nest objects based on *path*. See source for more info.
 
-* #### client.sendCommands(commandList, callback)
+#### Events
 
-### Events
-
-* #### error(err)
-
-* #### end
+* #### close
 
   The connection is closed.
-
-* #### connect
-
-  A socket connection has been made.
-
-* #### ready
-
-  The mpd server is ready to accept commands.
 
 * #### system(systemName)
 
@@ -131,18 +165,18 @@ For higher level API module check out [mpdjs-api](https://github.com/cotko/mpdjs
 
   See above event. Each system name has its own event as well.
 
-### Properties
+#### Properties
 
-* #### mpd.PROTOCOL_VERSION
+* #### client.PROTOCOL_VERSION
 
   Protocol version returned by the MPD server after connection is established
 
-* #### mpd.ACK_ERROR_CODES
+* #### mpd.MPDError
 
-  ACK codes map, as seen here [Ack.hxx](https://github.com/MusicPlayerDaemon/MPD/blob/master/src/protocol/Ack.hxx)
+  *MPDError.CODES* contains ACK codes map, as seen here [Ack.hxx](https://github.com/MusicPlayerDaemon/MPD/blob/master/src/protocol/Ack.hxx)
 
   ```js
-  ACK_ERROR_CODES = {
+  MPDError.CODES = {
     NOT_LIST: 1,
     ARG: 2,
     PASSWORD: 3,
@@ -158,25 +192,17 @@ For higher level API module check out [mpdjs-api](https://github.com/cotko/mpdjs
     EXIST: 56
   }
   ```
-
-## Error handling
-
-  MPD errors are reported as
-
+  
+  All errors thrown by MPD are converted into MPDError isntance:
+  ```js
+  // MPD ACK line looks like
+  'ACK [error@command_listNum] {current_command} message_text'
+  
+  err.code = 'ARG' // one of CODES
+  err.errno = 2 // for CODES.ARG
+  err.message = 'whatever mpd returned'
+  err.cmd_list_num = x // whatever MPD returned as listNum found in MPD ACK line
+  err.current_command = 'which command this error relates to' // found by MPD ACK line
   ```
-  ACK [error@command_listNum] {current_command} message_text
-  ```
 
-  When such error is received, it is thrown as a MPDError:
 
-  ```
-  MPDError {
-    err: "MPDError: <message_text>",
-    name: "MPDError",
-    ack_code: "<ACK_ERROR_CODE>", // ex: ARG
-    ack_code_num: <ACK_CODE_NUMBER>, // ex: 2 for ARG
-    message: "<message_text>",
-    cmd_list_num: <command_listNum>,
-    current_command: "<current_command>"
-  }
-  ```
