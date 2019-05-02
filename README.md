@@ -4,7 +4,7 @@ Connect to a [music player daemon](https://musicpd.org) ([GIT](https://github.co
 
 This is a rewrite of [mpd.js module](https://github.com/andrewrk/mpd.js) to promise based methods and support for parsing of various MPD responses.
 
-For higher level API module check out [mpdjs-api](https://github.com/cotko/mpdjs-api).
+For higher level API module check out [mpd-api](https://github.com/cotko/mpd-api).
 
 ### Usage
 
