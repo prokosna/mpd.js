@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "lint": "standard ./lib/**/*.js",
-    "lint-fix": "standard ./lib/**/*.js --fix"
+    "lintfix": "standard ./lib/**/*.js --fix"
   },
   "repository": {
     "type": "git",
