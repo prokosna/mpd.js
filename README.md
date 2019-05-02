@@ -1,45 +1,62 @@
-# node mpd client
+## node mpd client
 
-Connect to a [music player daemon](http://musicpd.org) server, send commands,
-emit events.
+Connect to a [music player daemon](https://musicpd.org) ([GIT](https://github.com/MusicPlayerDaemon/MPD)) server, send commands, emit events.
 
-You might also be interested in checking out
-[node-groove](https://github.com/andrewrk/node-groove),
-a generic music player backend as a node module.
+This is a rewrite of [mpd.js module](https://github.com/andrewrk/mpd.js) to promise based methods and support for parsing of various MPD responses.
 
-Or maybe [Groove Basin](https://github.com/andrewrk/groovebasin),
-a music player server which supports the MPD protocol and has many
-[features and improvements](http://andrewkelley.me/post/quest-build-ultimate-music-player.html)
-over MPD.
+For higher level API module check out [mpdjs-api](https://github.com/cotko/mpdjs-api).
 
-## Usage
+### Usage
 
   ```js
-  var mpd = require('mpd'),
-      cmd = mpd.cmd
-  var client = mpd.connect({
-    port: 6600,
+  const mpd = require('mpdjs')
+  const { cmd } = mpd
+
+  // config is passed to net.connect()
+  const config = {
     host: 'localhost',
-  });
-  client.on('ready', function() {
-    console.log("ready");
-  });
-  client.on('system', function(name) {
-    console.log("update", name);
-  });
-  client.on('system-player', function() {
-    client.sendCommand(cmd("status", []), function(err, msg) {
-      if (err) throw err;
-      console.log(msg);
-    });
-  });
+    port: 6600,
+
+    // if connecting to a local socket rather than
+    // host and port; trailing `~` is replaced by
+    // `os.homedir()`
+    // path: '~/.config/mpd/socket'
+
+    // if MPD requires a password, pass
+    // it within the config as well:
+    //password: 'password'
+  }
+
+  const client = await mpd.connect(config)
+
+  // without config will default to `localhost:6600`
+  // const client = await mpd.connect()
+
+
+  const status = await client.sendCommand('status').then(mpd.parseObject)
+  console.log(status)
+
+  client.on('close', () => {
+    console.log('client connection closed')
+  })
+
+  client.on('system', name => {
+    console.log('on system event: %s', name)
+  })
+
+  client.on('system-player', () => {
+    console.log('on system player event')
+  })
+
+  await client.disconnect()
+
   ```
 
-## Documentation
+### Documentation
 
   See also the [MPD Protocol Documentation](https://www.musicpd.org/doc/html/protocol.html).
 
-### Functions
+#### Functions
 
 * #### mpd.cmd(name, args)
 
