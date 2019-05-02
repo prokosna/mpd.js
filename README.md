@@ -66,7 +66,8 @@ For higher level API module check out [mpdjs-api](https://github.com/cotko/mpdjs
   await client.sendCommand(mpd.cmd('setvol', [50]))
   
   // args can be overloaded as well, no need to pass them as array:
-  const searched = await client.sendCommand(mpd.cmd('search', '(artist contains "Empire")', 'group', 'album'))
+  const searched = await client.sendCommand(
+    mpd.cmd('search', '(artist contains "Empire")', 'group', 'album'))
   
   ```
 
