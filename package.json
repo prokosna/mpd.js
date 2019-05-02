@@ -1,5 +1,5 @@
 {
-  "name": "mpdjs",
+  "name": "mpd2",
   "version": "1.0.0",
   "description": "Music Player Daemon client",
   "main": "./lib/index.js",
