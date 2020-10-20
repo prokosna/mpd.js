@@ -9,7 +9,7 @@ For higher level API module check out [mpd-api](https://github.com/cotko/mpd-api
 ### Usage
 
   ```
-  npm / yarn install mpd2
+  npm i / yarn mpd2
   ```
 
   ```js
