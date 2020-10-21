@@ -15,10 +15,18 @@ export declare namespace MPD {
   class Client extends EventEmitter {
     static connect(config?: MPD.Config): Promise<MPD.Client>;
     static MPDError: typeof MPDError;
+
     static Command: typeof Command;
     static cmd: typeof Command.cmd;
+
     static normalizeKeys: typeof Parsers.normalizeKeys;
     static autoparseValues: typeof Parsers.autoparseValues;
+
+    static parseObject: typeof Parsers.parseObject;
+    static parseList: Parsers.parseList;
+    static parseNestedList: typeof Parsers.parseNestedList;
+    static parseListAndAccumulate: typeof Parsers.parseListAndAccumulate;
+
 
     /**
      * Do not use directly, use mpd.connect(config) instead.
@@ -70,6 +78,9 @@ export declare namespace MPD {
      * Which command failed in case multiple commands were sent.
      */
     current_command: string;
+    /**
+     * Optional additional hint set by mpd2 itself.
+     */
     info?: string;
 
     /**
@@ -127,6 +138,7 @@ export declare namespace MPD {
   }
 
   namespace Parsers {
+    type Delimiters = string | string[] | {[key: string]: string };
 
     /**
      * Whether parser functions format all keys into `snake_case` or not.
@@ -144,6 +156,132 @@ export declare namespace MPD {
      * If `enabled` flag is omitted, method is used as a getter.
      */
     export const autoparseValues: (enabled?: boolean) => boolean;
+
+    /**
+     * Alias to parseList(lines)[0]
+     * @see mpd.parseList
+     */
+    export const parseObject: <T extends object>(line: string) => T;
+
+    export interface parseList {
+
+      /**
+       * Parse lines, first key represents a distinct object if no delimiters are passed.
+       *
+       * @example
+       * mpd.parseList(`
+       * file: some/path
+       * meta: meta
+       * foo: bar
+       * file: some/other/path
+       * `) => [ {file: 'some/path', meta: 'meta', foo: 'bar'},
+       *       { file: 'some/other/path }]
+       *
+       * @example
+       *
+       * // Pass delimiters in order to set distinct keys:
+       * // (without 'playlist' delimiter, key-vals would be
+       * // attached to frist file object):
+       *
+       * mpd.parseList(`
+       * file: some/path
+       * meta: meta
+       * playlist: playlist name
+       * modified: some-date
+       * file: some/other/path
+       * `, ['file', 'playlist']
+       * ) => [ {file: 'some/path', meta: 'meta'},
+       *        {playlist: 'playlist name', modified: 'some-date'},
+       *        {file: 'some/other/path'}
+       *     ]
+       */
+      <T extends object>(lines: string, delimiters?: Delimiters): T[];
+
+      /**
+       * "Currying" for @see parseList delimiters
+       * @example
+       * const playlistParser = mpd.parseList.by(['file', 'playlist'])
+       * const playlists = playlistParser(<mpd response>)
+       */
+      by<T extends object>(delimiters?: Delimiters): <E extends object = T>(lines: string) => E[];
+      /**
+       * "Currying" for @see parseList delimiters
+       * @example
+       * const playlistParser = mpd.parseList.by('file', 'playlist')
+       * const playlists = playlistParser(<mpd response>)
+       */
+      by<T extends object>(...delimiters: string[]): <E extends object = T>(lines: string) => E[];
+    }
+
+    /**
+     * Parse the list, first item key indicates
+     * the unique key identifier, any subtiems
+     * will be nested within that object.
+     *
+     *
+     * @example
+     * mpd.parseNestedList(`
+     * artist: foo
+     * album: foo
+     * title: bar
+     * title: fox
+     * title: jumps
+     * album: crazy
+     * title: mind
+     * artist: cactus
+     * ablum: cactusalbum
+     * title: bull
+     * `)
+     * // returns
+     * [ { artist: 'foo',
+     *     album:
+     *      [ { album: 'foo',
+     *          title:
+     *           [ { title: 'bar' },
+     *             { title: 'fox' },
+     *             { title: 'jumps' },
+     *             { title: 'mind' } ] },
+     *        { album: 'crazy' } ] },
+     *   { artist: 'cactus',
+     *     ablum: [ { ablum: 'cactusalbum', title: [ { title: 'bull' } ] } ] } ]
+     */
+    export const parseNestedList: <T extends object>(lines: string) => T[];
+
+    /**
+     * Usefull for commands:
+     *  `listallinfo` - parseListAndAccumulate(['directory', 'file'])(lines)
+     *  `decoders` - parseListAndAccumulate(['plugin'])(lines)
+     *
+     * @example
+     * mpd.parseListAndAccumulate(['directory', 'file'])(`
+     * directory: foo
+     * file: bar
+     * something: else
+     * file: fox
+     * meta: atem
+     * title: cool song
+     * fileblah: fileblah
+     * filenlahmeta: fbm
+     * filenlahmeta: same keys as array
+     * directory: bar
+     * file: hello
+     * title: hello song
+     * `)
+     * // returns
+     * [ { directory: 'foo',
+     *     file:
+     *      [ { file: 'bar', something: 'else' },
+     *        { file: 'fox',
+     *          meta: 'atem',
+     *          title: 'cool song',
+     *          fileblah:
+     *           [ { fileblah: 'fileblah',
+     *               filenlahmeta: [ 'fbm', 'same keys as array' ] } ] } ] },
+     *   { directory: 'bar',
+     *     file: [ { file: 'hello', title: 'hello song' } ] } ]
+     */
+    export const parseListAndAccumulate: <T extends object>(path: string[]) =>
+      (lines: string) => T[];
   }
 
 }
