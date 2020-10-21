@@ -52,7 +52,7 @@ export declare namespace MPD {
      *  command_list_end
      *
      */
-    sendCommands (commands: string[]): Promise<string>;
+    sendCommands (commands: (string | Command)[]): Promise<string>;
 
     setupIdling (): void;
     stopIdling (): void;
@@ -281,7 +281,7 @@ export declare namespace MPD {
      *     file: [ { file: 'hello', title: 'hello song' } ] } ]
      */
     export const parseListAndAccumulate: <T extends object>(path: string[]) =>
-      (lines: string) => T[];
+      <E extends object = T>(lines: string) => E[];
   }
 
 }

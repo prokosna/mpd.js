@@ -56,6 +56,69 @@ For higher level API module check out [mpd-api](https://github.com/cotko/mpd-api
 
   ```
 
+  ```ts
+
+  // typings included
+
+  import mpd, { MPD } from 'mpd2'
+
+  type Status = {
+    volume: number
+    repeat: boolean
+    playlist: number
+    state: 'play' | 'stop' | 'pause'
+    // ...
+  }
+
+  type ListAllInfo = {
+    directory: string
+    last_modified: string
+    file?: File[]
+  }
+
+  type File = {
+    file: string
+    last_modified: string
+    format: string
+    time: number
+    artist: string
+    title: string
+    // ...
+  }
+
+  const client: MPD.Client = await mpd.connect()
+
+  const statusString = await client.sendCommand('status')
+  const status = mpd.parseObject<Status>(statusString)
+
+  console.log('state:', status.state)
+
+  const lsAllParser = mpd.parseListAndAccumulate<ListAllInfo>(['directory', 'file'])
+  const lsAllString = await client.sendCommand('listallinfo')
+  const lsAll = lsAllParser(lsAllString)
+  console.log('first directory: %s, files: %o', lsAll[0].directory, lsAll[0].file)
+
+  try {
+
+    await client.sendCommands([
+      'status',
+      mpd.cmd('foo', 'bar')
+    ])
+  } catch (e) {
+    const err: MPD.MPDError = e
+
+    switch (err.errno) {
+      case mpd.MPDError.CODES.UNKNOWN:
+        console.log('command does not exist')
+        break;
+      default:
+        console.log('some other error', err)
+        break;
+    }
+  }
+
+  ```
+
 ### Documentation
 
   See also the [MPD Protocol Documentation](https://www.musicpd.org/doc/html/protocol.html).
