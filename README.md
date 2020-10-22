@@ -1,6 +1,6 @@
 ## node mpd client
 
-Connect to a [music player daemon](https://musicpd.org) ([GIT](https://github.com/MusicPlayerDaemon/MPD)) server, send commands, emit events.
+Connect to a [Music Player Daemon](https://musicpd.org) ([GIT](https://github.com/MusicPlayerDaemon/MPD)) server, send commands, emit events.
 
 This is a rewrite of [mpd.js module](https://github.com/andrewrk/mpd.js) to promise based methods and support for parsing of various MPD responses.
 
