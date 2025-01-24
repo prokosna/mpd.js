@@ -1,29 +1,67 @@
-'use strict'
+import { MPDError } from './error'
 
 let NORMALIZE_KEYS = true
 let AUTOPARSE_VALUES = true
 
-const { MPDError } = require('./error')
+// Type definitions
+export interface ParsedAudio {
+  sample_rate: number
+  bits: number
+  channels: number
+  sample_rate_short?: {
+    value: number
+    unit: string
+  }
+  original_value: string
+}
 
-exports.isString = val => typeof val === 'string'
-exports.isNumber = val => typeof val === 'number'
+export interface ParsedTime {
+  elapsed: number
+  total: number
+}
 
-exports.isNonEmptyString = val =>
-  exports.isString(val) && !!val.trim().length
+export interface ShortUnitResult {
+  value: number
+  unit: string
+}
 
-exports.escapeArg = arg => {
-  const escaped = (arg + '').replace(/"/g, '\\"')
+export interface ParseListMemo<T = any> {
+  delims: Record<string, boolean> | null
+  current: T | null
+  list: T[]
+}
+
+export interface ParseNestedListMemo<T = any> {
+  objpath: T[]
+  keypath: string[]
+  list: T[]
+}
+
+export interface ParseListAndAccumulateMemo<T = any> {
+  objpath: T[]
+  list: T[]
+}
+
+// Basic utilities
+export const isString = (val: unknown): val is string => typeof val === 'string'
+export const isNumber = (val: unknown): val is number => typeof val === 'number'
+
+export const isNonEmptyString = (val: unknown): boolean =>
+  isString(val) && !!val.trim().length
+
+export const escapeArg = (arg: string | number): string => {
+  const escaped = String(arg).replace(/"/g, '\\"')
   return `"${escaped}"`
 }
 
-exports.normalizeKeys = val => {
+export const normalizeKeys = (val?: boolean): boolean => {
   if (typeof val === 'boolean') {
     NORMALIZE_KEYS = val
   }
   return NORMALIZE_KEYS
 }
 
-exports.autoparseValues = val => {
+export const autoparseValues = (val?: boolean): boolean => {
   if (typeof val === 'boolean') {
     AUTOPARSE_VALUES = val
   }
@@ -58,9 +96,9 @@ exports.autoparseValues = val => {
  *        {file: 'some/other/path'}
  *     ]
  */
-exports.parseList = (msg, delimiters) => msg
+export const parseList = <T = Record<string, any>>(msg: string, delimiters?: string | string[] | Record<string, boolean>): T[] => msg
   .split('\n')
-  .reduce((memo, line) => {
+  .reduce((memo: ParseListMemo<T>, line: string) => {
     if (ignoreLine(line)) {
       return memo
     }
@@ -72,24 +110,23 @@ exports.parseList = (msg, delimiters) => msg
       ? true
       : memo.delims !== null
         ? memo.delims[key]
-        : memo.current[key] !== undefined
+        : memo.current[key as keyof T] !== undefined
 
     if (isNew) {
-      memo.current = {}
+      memo.current = {} as T
       memo.list.push(memo.current)
     }
 
     // if current already has this key,
     // then make it a list of values
-    if (memo.current[key] === undefined) {
-      memo.current[key] = val
-
-    // only make list if values differ
-    } else if (memo.current[key] !== val) {
-      if (!(memo.current[key] instanceof Array)) {
-        memo.current[key] = [memo.current[key]]
+    const currentKey = key as keyof T
+    if (memo.current[currentKey] === undefined) {
+      memo.current[currentKey] = val as T[keyof T]
+    } else if (memo.current[currentKey] !== val) {
+      if (!Array.isArray(memo.current[currentKey])) {
+        memo.current[currentKey] = [memo.current[currentKey]] as T[keyof T]
       }
-      memo.current[key].push(val)
+      (memo.current[currentKey] as any[]).push(val)
     }
 
     return memo
@@ -97,18 +134,16 @@ exports.parseList = (msg, delimiters) => msg
     delims: delimiters2object(delimiters),
     current: null,
     list: []
-  })
+  } as ParseListMemo<T>)
   .list
 
-exports.parseList.by = (...delimiters) => {
-  if (delimiters instanceof Array && delimiters.length === 1) {
-    delimiters = delimiters[0]
+parseList.by = <T = Record<string, any>>(...delimiters: (string | string[] | Record<string, boolean>)[]) => {
+  if (Array.isArray(delimiters) && delimiters.length === 1) {
+    delimiters = delimiters[0] as string[]
   }
-  delimiters = delimiters2object(delimiters)
-  return msg => exports.parseList(msg, delimiters)
+  const delimsObj = delimiters2object(delimiters[0])
+  return (msg: string): T[] => parseList<T>(msg, delimsObj)
 }
-
-exports.parseObject = msg => exports.parseList(msg)[0]
 
 /**
  * Parse the list, first item key indicates
@@ -137,49 +172,57 @@ exports.parseObject = msg => exports.parseList(msg)[0]
  *   { artist: 'cactus',
  *     ablum: [ { ablum: 'cactusalbum', title: [ { title: 'bull' } ] } ] } ]
  */
-exports.parseNestedList = msg => msg
+export const parseObject = <T = Record<string, any>>(msg: string): T | undefined =>
+  parseList<T>(msg)[0]
+
+export const parseNestedList = <T = Record<string, any>>(msg: string): T[] => msg
   .split('\n')
-  .reduce((memo, line) => {
+  .reduce((memo: ParseNestedListMemo<T>, line: string) => {
     if (ignoreLine(line)) {
       return memo
     }
 
-    let target
     const [key, val] = mpdLine2keyVal(line)
-    const obj = { [key]: val }
+    const obj = { [key]: val } as T
+    const keyIdx = memo.keypath.indexOf(key)
 
-    if (!memo.delims) {
-      memo.delims = { [key]: true }
-    }
+    let target: T[]
 
-    // is this new entry of default type
-    if (memo.delims[key]) {
+    // new top entry
+    if (keyIdx === 0) {
+      memo.list.push(obj)
       memo.objpath = [obj]
-      memo.keypath = [key]
-      target = memo.list
-    } else {
-      const kpos = memo.keypath.indexOf(key)
+    } else if (keyIdx !== -1) {
+      let parent = memo.objpath[keyIdx - 1] as any
+      if (parent[key] === undefined) {
+        parent[key] = []
+      }
 
-      // first entry of this sub type into the
-      // current item
-      if (kpos === -1) {
-        target = []
-        memo.objpath[memo.objpath.length - 1][key] = target
-        memo.objpath.push(obj)
-        memo.keypath.push(key)
-      } else {
-        target = memo.objpath[kpos - 1][key]
+      parent[key].push(obj)
+      memo.objpath[keyIdx] = obj
+
+      if (memo.objpath.length > keyIdx + 1) {
+        memo.objpath.length = keyIdx + 1
+      }
+    } else {
+      target = memo.objpath[memo.objpath.length - 1] as any
+      if (target[key] === undefined) {
+        target[key] = val
+      } else if (target[key] !== val) {
+        if (Array.isArray(target[key])) {
+          target[key].push(val)
+        } else {
+          target[key] = [target[key], val]
+        }
       }
     }
-
-    target.push(obj)
 
     return memo
   }, {
     objpath: [],
     keypath: [],
     list: []
-  })
+  } as ParseNestedListMemo<T>)
   .list
 
 /**
@@ -210,27 +253,23 @@ exports.parseNestedList = msg => msg
  *   { directory: 'bar',
  *     file: [ { file: 'hello', title: 'hello song' } ] } ]
  */
-exports.parseListAndAccumulate = path => msg => msg
+export const parseListAndAccumulate = (path: string[]) => <T = Record<string, any>>(msg: string): T[] => msg
   .split('\n')
-  .reduce((memo, line) => {
+  .reduce((memo: ParseListAndAccumulateMemo<T>, line: string) => {
     if (ignoreLine(line)) {
       return memo
     }
 
     const [key, val] = mpdLine2keyVal(line)
-    const obj = { [key]: val }
+    const obj = { [key]: val } as T
     const keyIdx = path.indexOf(key)
-
-    let target
 
     // new top entry
     if (keyIdx === 0) {
       memo.list.push(obj)
       memo.objpath = [obj]
-
-    // new non top accumulator entry
     } else if (keyIdx !== -1) {
-      let parent = memo.objpath[keyIdx - 1]
+      let parent = memo.objpath[keyIdx - 1] as any
       if (parent[key] === undefined) {
         parent[key] = []
       }
@@ -249,11 +288,11 @@ exports.parseListAndAccumulate = path => msg => msg
 
     // insert key-val to the last object
     } else {
-      target = memo.objpath[memo.objpath.length - 1]
+      const target = memo.objpath[memo.objpath.length - 1] as any
       if (target[key] === undefined) {
         target[key] = val
       } else if (target[key] !== val) {
-        if (target[key] instanceof Array) {
+        if (Array.isArray(target[key])) {
           target[key].push(val)
         } else {
           target[key] = [target[key], val]
@@ -265,14 +304,15 @@ exports.parseListAndAccumulate = path => msg => msg
   }, {
     objpath: [],
     list: []
-  })
+  } as ParseListAndAccumulateMemo<T>)
   .list
 
-const delimiters2object = delimiters => {
+// Internal utilities
+const delimiters2object = (delimiters?: string | string[] | Record<string, boolean>): Record<string, boolean> | null => {
   if (typeof delimiters === 'string') {
     return { [delimiters]: true }
   }
-  if (delimiters instanceof Array) {
+  if (Array.isArray(delimiters)) {
     return delimiters.reduce((delims, key) => ({ ...delims, [key]: true }), {})
   }
   if (typeof delimiters === 'object' && delimiters != null) {
@@ -281,106 +321,102 @@ const delimiters2object = delimiters => {
   return null
 }
 
-const mpdLine2keyVal = line => {
-  let keyValue = line.match(/([^ ]+): (.*)/)
+const mpdLine2keyVal = (line: string): [string, any] => {
+  const keyValue = line.match(/([^ ]+): (.*)/)
 
   if (keyValue == null) {
     throw new MPDError('Could not parse entry', 'EPARSE', line)
   }
 
-  // eslint-disable-next-line no-unused-vars
-  let [_, key, val] = keyValue
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_, key, val] = keyValue
 
-  if (NORMALIZE_KEYS) {
-    key = normalizeKey(key)
-  }
+  const normalizedKey = NORMALIZE_KEYS ? normalizeKey(key) : key
+  const parsedVal = AUTOPARSE_VALUES ? autoParse(normalizedKey, val) : val
 
-  if (AUTOPARSE_VALUES) {
-    val = autoParse(NORMALIZE_KEYS ? key : normalizeKey(key), val)
-  }
-
-  return [key, val]
+  return [normalizedKey, parsedVal]
 }
 
-// ignore empty lines and OK responses when parsing
-const ignoreLine = line => line.trim().length === 0 || line === 'OK'
+const ignoreLine = (line: string): boolean =>
+  line.trim().length === 0 || line === 'OK'
 
-const normalizeKey = key => key
-  .toLowerCase()
-  .replace(/[^a-z_]/g, '_')
+const normalizeKey = (key: string): string =>
+  key.toLowerCase().replace(/[^a-z_]/g, '_')
 
-const autoParse = (key, val) => {
-  return VAL_PARSERS[key]
-    ? VAL_PARSERS[key](val)
+const autoParse = (key: string, val: string): any =>
+  VAL_PARSERS[key as keyof typeof VAL_PARSERS]
+    ? VAL_PARSERS[key as keyof typeof VAL_PARSERS](val)
     : val
-}
 
 const parsers = {
-  parseInt: num => {
-    let val = parseInt(num)
-    if (isNaN(val)) return 0
-    return val
+  parseInt(num: string | number): number {
+    const val = parseInt(String(num))
+    return isNaN(val) ? 0 : val
   },
 
-  tryParseInt: num => {
-    let val = parseInt(num)
-    // eslint-disable-next-line eqeqeq
-    return val == num
-      ? val
-      : num
+  tryParseInt(num: string | number): number | string {
+    const val = parseInt(String(num))
+    return val.toString() === String(num) ? val : num
   },
 
-  parseFloat: num => {
-    let val = parseFloat(num)
-    if (isNaN(val)) return 0
-    return val
+  parseFloat(num: string | number): number {
+    const val = parseFloat(String(num))
+    return isNaN(val) ? 0 : val
   },
 
-  parseBool: val => {
-    if (val === true || val === false) { return val }
-
+  parseBool(val: unknown): boolean {
+    if (typeof val === 'boolean') return val
     if (val === 1) return true
     if (val === 0) return false
 
     if (typeof val === 'string') {
-      val = val.toLowerCase().trim()
-      if (val === 'true') return true
-      if (val === '1') return true
-      if (val === 'on') return true
-      return false
+      const normalized = val.toLowerCase().trim()
+      return normalized === 'true' || normalized === '1' || normalized === 'on'
     }
+    return false
   },
 
-  parseSingleFlag: val => {
-    if (`${val}`.toLowerCase() === 'oneshot') {
+  parseSingleFlag(val: unknown): 'oneshot' | boolean {
+    if (String(val).toLowerCase() === 'oneshot') {
       return 'oneshot'
     }
     return parsers.parseBool(val)
   },
 
-  parseTime: val => {
-    if (val.indexOf(':') === -1) {
+  parseTime(val: string): ParsedTime | number {
+    if (!val.includes(':')) {
       return parsers.parseInt(val)
     }
     const [elapsed, total] = val.split(':').map(parsers.parseInt)
     return { elapsed, total }
   },
 
-  parseAudio: val => {
+  parseAudio(val: string): ParsedAudio {
     const [sampleRate, bits, channels] = val
       .split(':').map(parsers.tryParseInt)
 
-    const result = { sample_rate: sampleRate, bits, channels }
+    const result: ParsedAudio = {
+      sample_rate: sampleRate as number,
+      bits: bits as number,
+      channels: channels as number,
+      original_value: val
+    }
 
-    if (exports.isNumber(sampleRate)) {
+    if (isNumber(sampleRate)) {
       const srs = parsers.toShortUnit(sampleRate)
       srs.unit += 'Hz'
       result.sample_rate_short = srs
     }
 
-    result.original_value = val
-
     return result
+  },
+
+  parseBitrateKBPS(val: string | number): { value: number; unit: string } {
+    const bitrate = parsers.parseInt(val)
+    return {
+      value: bitrate,
+      unit: 'kbps'
+    }
   },
 
   /**
@@ -389,12 +425,12 @@ const parsers = {
    * @param {Number} [digits=`${num}`.length] will be used with toFixed
    * @returns {module:parser~ShortUnitResult}
    */
-  toShortUnit: (num, digits) => {
-    if (!exports.isNumber(digits)) {
-      digits = `${num}`.length
+  toShortUnit(num: number, digits?: number): ShortUnitResult {
+    if (!isNumber(digits)) {
+      digits = String(num).length
     }
 
-    let si = [
+    const si = [
       { value: 1, symbol: '' },
       { value: 1E3, symbol: 'k' },
       { value: 1E6, symbol: 'M' },
@@ -403,50 +439,43 @@ const parsers = {
       { value: 1E15, symbol: 'P' },
       { value: 1E18, symbol: 'E' }
     ]
-    var rx = /\.0+$|(\.[0-9]*[1-9])0+$/
+
+    const rx = /\.0+$|(\.[0-9]*[1-9])0+$/
     let ii
     for (ii = si.length - 1; ii > 0; ii--) {
       if (num >= si[ii].value) {
         break
       }
     }
+
     return {
-      value: parsers
-        .parseFloat((num / si[ii].value)
+      value: parsers.parseFloat(
+        (num / si[ii].value)
           .toFixed(digits)
-          .replace(rx, '$1')),
+          .replace(rx, '$1')
+      ),
       unit: si[ii].symbol
     }
   }
-
 }
 
-const VAL_PARSERS = {
-  //
+const VAL_PARSERS: Record<string, (val: string) => any> = {
   // file
-  //
   format: parsers.parseAudio,
 
-  //
   // song
-  //
   duration: parsers.parseFloat,
   time: parsers.parseTime,
-  range: parsers.parseRange,
   track: parsers.parseFloat,
   disc: parsers.parseInt,
   originaldate: parsers.parseInt,
 
-  //
   // playlist related meta data
-  //
   prio: parsers.parseInt,
   id: parsers.parseInt,
   pos: parsers.parseInt,
 
-  //
   // status
-  //
   volume: parsers.parseInt,
   songid: parsers.parseInt,
   nextsongid: parsers.parseInt,
@@ -469,9 +498,7 @@ const VAL_PARSERS = {
   single: parsers.parseSingleFlag,
   audio: parsers.parseAudio,
 
-  //
   // stats
-  //
   artists: parsers.parseInt,
   albums: parsers.parseInt,
   songs: parsers.parseInt,
@@ -480,24 +507,16 @@ const VAL_PARSERS = {
   db_update: parsers.parseInt,
   playtime: parsers.parseInt,
 
-  //
   // outputs
-  //
   outputid: parsers.tryParseInt,
   outputenabled: parsers.parseBool,
 
-  //
   // queue
-  //
   cpos: parsers.tryParseInt,
 
-  //
   // ls related
-  //
   size: parsers.tryParseInt,
 
-  //
   // albumart
-  //
   binary: parsers.tryParseInt
 }

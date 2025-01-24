@@ -2,8 +2,8 @@
   "name": "mpd2",
   "version": "1.0.5",
   "description": "Music Player Daemon client",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/lib/index.js",
+  "types": "./dist/lib/index.d.ts",
   "author": "Cotko <cotkocot@gmail.com>",
   "license": "UNLICENSED",
   "scripts": {
@@ -11,7 +11,8 @@
     "prepare": "npm run build",
     "lint": "standard ./lib/**/*.ts",
     "lintfix": "standard ./lib/**/*.ts --fix",
-    "test": "jest",
+    "test": "jest unit",
+    "test:integration": "jest int",
     "test:coverage": "jest --coverage"
   },
   "repository": {
