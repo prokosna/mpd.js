@@ -5,7 +5,6 @@ import path from 'path'
 import { EventEmitter } from 'events'
 import assert from 'assert'
 import debug from 'debug'
-import { name as packageName } from '../package.json'
 
 import { isError, MPDError } from './error'
 import {
@@ -20,8 +19,9 @@ import {
   autoparseValues
 } from './parsers'
 import { Command } from './command'
+import { PACKAGE_NAME } from './const'
 
-const debugLog = debug(packageName)
+const debugLog = debug(`${PACKAGE_NAME}:error`)
 
 const MPD_SENTINEL = /^(OK|ACK|list_OK)(.*)$/m
 const OK_MPD = /^OK MPD /
@@ -368,4 +368,5 @@ const isSocket = (socketPath: string): string | undefined => {
   return undefined
 }
 
-export = MPDClient
+export default MPDClient
+export { MPDClient }

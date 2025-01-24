@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
-    "target": "es2016",
-    "module": "commonjs",
+    "target": "ESNext",
+    "module": "ESNext",
     "declaration": true,
     "sourceMap": true,
     "outDir": "./dist",
@@ -9,7 +9,9 @@
     "forceConsistentCasingInFileNames": true,
     "strict": false,
     "skipLibCheck": true,
+    "moduleResolution": "node",
     "resolveJsonModule": true
   },
-  "include": ["lib/*.ts"]
+  "include": ["lib/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
 }

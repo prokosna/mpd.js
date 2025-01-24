@@ -1,7 +1,7 @@
 import debug from 'debug'
-import { name as packageName } from '../package.json'
+import { PACKAGE_NAME } from './const'
 
-const debugLog = debug(`${packageName}:error`)
+const debugLog = debug(`${PACKAGE_NAME}:error`)
 
 export enum MPDErrorCode {
   /** 1 */
