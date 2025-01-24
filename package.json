@@ -36,11 +36,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/cotko/mpd.js"
+    "url": "https://github.com/prokosna/mpd.js"
   },
   "keywords": [
     "mpd",
     "mpd2",
+    "mpd3",
     "music",
     "player",
     "daemon",
