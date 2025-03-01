@@ -28,7 +28,7 @@
     "build:cjs": "tsc --project tsconfig.cjs.json",
     "build": "npm run build:esm && npm run build:cjs",
     "prepare": "npm run build",
-    "lint": "biome lint ./lib/*.ts --write --unsafe",
+    "lint": "biome lint ./lib/*.ts --write --unsafe --max-diagnostics none",
     "fmt": "biome format ./lib/*.ts --write",
     "test": "jest unit",
     "test:integration": "jest int",
