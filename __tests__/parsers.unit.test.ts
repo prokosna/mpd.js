@@ -141,14 +141,12 @@ title: bull`
               title: [
                 { title: 'bar' },
                 { title: 'fox' },
-                { title: 'jumps' }
+                { title: 'jumps' },
+                { title: 'mind' }
               ]
             },
             {
               album: 'crazy',
-              title: [
-                { title: 'mind' }
-              ]
             }
           ]
         },
