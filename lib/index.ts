@@ -81,11 +81,16 @@ class MPDClient extends EventEmitter {
       ...config,
       port: config.port,
       host: config.host,
-      path: config.path
+      path: config.path,
+      timeout: config.timeout || 2000
     }
 
+    const socket = net.connect(netConfig)
+    // Ensure the socket has a timeout set
+    socket.setTimeout(netConfig.timeout as number)
+
     return finalizeClientConnection(
-      new MPDClient(config), net.connect(netConfig))
+      new MPDClient(config), socket)
   }
 
   async sendCommand(command: string): Promise<string> {
