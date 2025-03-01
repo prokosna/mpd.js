@@ -139,10 +139,11 @@ export const parseList = <T = Record<string, any>>(msg: string, delimiters?: str
   .list
 
 parseList.by = <T = Record<string, any>>(...delimiters: (string | string[] | Record<string, boolean>)[]) => {
+  let delims = delimiters;
   if (Array.isArray(delimiters) && delimiters.length === 1) {
-    delimiters = delimiters[0] as string[]
+    delims = delimiters[0] as string[]
   }
-  const delimsObj = delimiters2object(delimiters[0])
+  const delimsObj = delimiters2object(delims[0])
   return (msg: string): T[] => parseList<T>(msg, delimsObj)
 }
 
@@ -450,8 +451,9 @@ const parsers = {
    * @returns {module:parser~ShortUnitResult}
    */
   toShortUnit(num: number, digits?: number): ShortUnitResult {
+    let digitsToUse = digits
     if (!isNumber(digits)) {
-      digits = String(num).length
+      digitsToUse = String(num).length
     }
 
     const si = [
@@ -475,7 +477,7 @@ const parsers = {
     return {
       value: parsers.parseFloat(
         (num / si[ii].value)
-          .toFixed(digits)
+          .toFixed(digitsToUse)
           .replace(rx, '$1')
       ),
       unit: si[ii].symbol
