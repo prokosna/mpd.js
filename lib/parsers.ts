@@ -465,7 +465,7 @@ const parsers = {
     ]
 
     const rx = /\.0+$|(\.[0-9]*[1-9])0+$/
-    let ii
+    let ii: number
     for (ii = si.length - 1; ii > 0; ii--) {
       if (num >= si[ii].value) {
         break
