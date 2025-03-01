@@ -107,7 +107,7 @@ export const parseList = <T = Record<string, any>>(msg: string, delimiters?: str
     const [key, val] = mpdLine2keyVal(line)
 
     // is new entry?
-    let isNew = !memo.current
+    const isNew = !memo.current
       ? true
       : memo.delims !== null
         ? memo.delims[key]
@@ -293,7 +293,7 @@ export const parseListAndAccumulate = (path: string[]) => <T = Record<string, an
       memo.list.push(obj)
       memo.objpath = [obj]
     } else if (keyIdx !== -1) {
-      let parent = memo.objpath[keyIdx - 1] as any
+      const parent = memo.objpath[keyIdx - 1] as any
       if (parent[key] === undefined) {
         parent[key] = []
       }
@@ -374,18 +374,18 @@ const autoParse = (key: string, val: string): any =>
 
 const parsers = {
   parseInt(num: string | number): number {
-    const val = parseInt(String(num))
-    return isNaN(val) ? 0 : val
+    const val = Number.parseInt(String(num))
+    return Number.isNaN(val) ? 0 : val
   },
 
   tryParseInt(num: string | number): number | string {
-    const val = parseInt(String(num))
+    const val = Number.parseInt(String(num))
     return val.toString() === String(num) ? val : num
   },
 
   parseFloat(num: string | number): number {
-    const val = parseFloat(String(num))
-    return isNaN(val) ? 0 : val
+    const val = Number.parseFloat(String(num))
+    return Number.isNaN(val) ? 0 : val
   },
 
   parseBool(val: unknown): boolean {

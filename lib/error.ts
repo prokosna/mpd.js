@@ -31,7 +31,7 @@ export enum MPDErrorCode {
 }
 
 const CODES_REVERSED: { [key: number]: string } = Object.entries(MPDErrorCode)
-  .filter(([key]) => isNaN(Number(key)))
+  .filter(([key]) => Number.isNaN(Number(key)))
   .reduce((memo, [key, value]) => ({ ...memo, [value]: key }), {})
 
 export class MPDError extends Error {

@@ -1,9 +1,9 @@
-import net from 'net'
-import os from 'os'
-import fs from 'fs'
-import path from 'path'
-import { EventEmitter } from 'events'
-import assert from 'assert'
+import net from 'node:net'
+import os from 'node:os'
+import fs from 'node:fs'
+import path from 'node:path'
+import { EventEmitter } from 'node:events'
+import assert from 'node:assert'
 import debug from 'debug'
 
 import { isError, MPDError } from './error'
@@ -103,9 +103,7 @@ class MPDClient extends EventEmitter {
   }
 
   async sendCommands(commandList: (string | Command)[]): Promise<string> {
-    const cmd = 'command_list_begin\n' +
-      commandList.join('\n') +
-      '\ncommand_list_end'
+    const cmd = `command_list_begin\n${commandList.join('\n')}\ncommand_list_end`
     return this.sendCommand(cmd)
   }
 
@@ -136,17 +134,17 @@ class MPDClient extends EventEmitter {
       throw new MPDError('Not connected', 'ENOTCONNECTED')
     }
     debugLog('sending %s', data)
-    this.socket.write(data + '\n')
+    this.socket.write(`${data}\n`)
   }
 
   disconnect(): Promise<void> {
     this._disconnecting = true
     return new Promise((resolve) => {
-      if (this.socket && this.socket.destroyed) {
+      if (this.socket?.destroyed) {
         return resolve()
       }
 
-      let _resolve = () => {
+      const _resolve = () => {
         if (resolve) {
           resolve()
           resolve = null
@@ -272,7 +270,7 @@ const finalizeClientConnection = (client: MPDClient, socket: net.Socket): Promis
       )
 
       if (password) {
-        delete (client as any)._config.password
+        (client as any)._config.password = undefined
       }
 
       socket.removeListener('data', onData)
