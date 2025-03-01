@@ -183,7 +183,8 @@ class MPDClient extends EventEmitter {
   private _receive(data: string): void {
     let matched: RegExpMatchArray | null
     this._buf += data
-    while ((matched = this._buf.match(MPD_SENTINEL)) !== null) {
+    matched = this._buf.match(MPD_SENTINEL)
+    while (matched !== null) {
       const msg = this._buf.substring(0, matched.index)
       const line = matched[0]
       const code = matched[1]
@@ -194,6 +195,7 @@ class MPDClient extends EventEmitter {
         : this._reject(new MPDError(desc))
 
       this._buf = this._buf.substring(msg.length + line.length + 1)
+      matched = this._buf.match(MPD_SENTINEL)
     }
   }
 
