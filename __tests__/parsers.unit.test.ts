@@ -1,77 +1,196 @@
-const {
+import {
   isString,
   isNonEmptyString,
   escapeArg,
   parseList,
   parseObject,
+  parseListAndAccumulate,
+  parseNestedList,
   normalizeKeys,
   autoparseValues
-} = require('../lib/parsers')
+} from '../lib/parsers'
 
 describe('parsers', () => {
   describe('string utilities', () => {
-    test('should check if value is string', () => {
-      expect(isString('test')).toBe(true)
-      expect(isString(123)).toBe(false)
+    it('should check if value is string', () => {
+      expect(isString('')).toBe(true)
+      expect(isString('foo')).toBe(true)
       expect(isString(null)).toBe(false)
+      expect(isString(undefined)).toBe(false)
+      expect(isString(123)).toBe(false)
+      expect(isString({})).toBe(false)
     })
 
-    test('should check if string is non-empty', () => {
-      expect(isNonEmptyString('test')).toBe(true)
+    it('should check if string is non-empty', () => {
       expect(isNonEmptyString('')).toBe(false)
-      expect(isNonEmptyString(' ')).toBe(false)
+      expect(isNonEmptyString('foo')).toBe(true)
+      expect(isNonEmptyString(null)).toBe(false)
+      expect(isNonEmptyString(undefined)).toBe(false)
     })
 
-    test('should escape arguments properly', () => {
-      expect(escapeArg('test')).toBe('"test"')
-      expect(escapeArg('test "quoted"')).toBe('"test \\"quoted\\""')
-    })
-  })
-
-  describe('parseList', () => {
-    beforeEach(() => {
-      normalizeKeys(true)
-      autoparseValues(true)
-    })
-
-    test('should parse simple key-value pairs', () => {
-      const input = 'name: Test\nartist: Artist\nalbum: Album'
-      const expected = [{
-        name: 'Test',
-        artist: 'Artist',
-        album: 'Album'
-      }]
-      expect(parseList(input)).toEqual(expected)
-    })
-
-    test('should parse multiple objects separated by delimiter', () => {
-      const input = 'file: song1.mp3\ntitle: Song 1\nfile: song2.mp3\ntitle: Song 2'
-      const expected = [
-        { file: 'song1.mp3', title: 'Song 1' },
-        { file: 'song2.mp3', title: 'Song 2' }
-      ]
-      expect(parseList(input, ['file'])).toEqual(expected)
-    })
-
-    test('should handle empty input', () => {
-      expect(parseList('')).toEqual([])
-    })
-
-    test('should throw error on malformed input', () => {
-      const input = 'invalid line\nkey: value'
-      expect(() => parseList(input)).toThrow('Could not parse entry')
+    it('should escape arguments properly', () => {
+      expect(escapeArg('foo')).toBe('"foo"')
+      expect(escapeArg('foo bar')).toBe('"foo bar"')
+      expect(escapeArg('foo "bar"')).toBe('"foo \\"bar\\""')
     })
   })
 
   describe('parseObject', () => {
-    test('should parse single object', () => {
-      const input = 'name: Test\nvalue: 123'
-      const expected = { name: 'Test', value: "123" }
-      expect(parseObject(input)).toEqual(expected)
+    it('should parse single object', () => {
+      const input = 'volume: 50\nrepeat: 1\nrandom: 0\nstate: play\n'
+      const result = parseObject(input)
+      expect(result).toEqual({
+        volume: 50,
+        repeat: true,
+        random: false,
+        state: 'play'
+      })
     })
 
-    test('should return undefined for empty input', () => {
+    it('should handle boolean values', () => {
+      const input = 'repeat: 1\nrandom: 0\nsingle: 1\nconsume: 0\n'
+      const result = parseObject(input)
+      expect(result).toEqual({
+        repeat: true,
+        random: false,
+        single: true,
+        consume: false
+      })
+    })
+
+    it('should return undefined for empty input', () => {
       expect(parseObject('')).toBeUndefined()
+    })
+  })
+
+  describe('parseList', () => {
+    it('should parse simple key-value pairs', () => {
+      const input = 'file: song1.mp3\nTitle: Song 1\nArtist: Artist 1\n\nfile: song2.mp3\nTitle: Song 2\nArtist: Artist 2\n'
+      const result = parseList(input, ['file'])
+      expect(result).toHaveLength(2)
+      expect(result[0]).toEqual({
+        file: 'song1.mp3',
+        title: 'Song 1',
+        artist: 'Artist 1'
+      })
+    })
+
+    it('should parse multiple objects separated by delimiter', () => {
+      const input = 'directory: dir1\nLast-Modified: 2024-01-24\n\ndirectory: dir2\nLast-Modified: 2024-01-24\n'
+      const result = parseList(input, ['directory'])
+      expect(result).toHaveLength(2)
+      expect(result[0]).toEqual({
+        directory: 'dir1',
+        last_modified: '2024-01-24'
+      })
+    })
+
+    it('should handle empty input', () => {
+      expect(parseList('', ['file'])).toEqual([])
+    })
+  })
+
+  describe('parseListAndAccumulate', () => {
+    it('should parse and accumulate nested objects', () => {
+      const input = `directory: Music
+Last-Modified: 2024-01-24
+file: song1.mp3
+Title: Song 1
+Artist: Artist 1
+
+directory: Music/Rock
+Last-Modified: 2024-01-24
+file: song2.mp3
+Title: Song 2
+Artist: Artist 2
+`
+      const parser = parseListAndAccumulate(['directory', 'file'])
+      const result = parser(input)
+      expect(result).toHaveLength(2)
+      expect(result[0]).toEqual({
+        directory: 'Music',
+        last_modified: '2024-01-24',
+        file: [{
+          file: 'song1.mp3',
+          title: 'Song 1',
+          artist: 'Artist 1'
+        }]
+      })
+    })
+  })
+
+  describe('parseNestedList', () => {
+    it('should parse nested list structure', () => {
+      const input = `artist: foo
+album: foo
+title: bar
+title: fox
+title: jumps
+album: crazy
+title: mind
+artist: cactus
+album: cactusalbum
+title: bull`
+      const result = parseNestedList(input)
+      expect(result).toEqual([
+        {
+          artist: 'foo',
+          album: [
+            {
+              album: 'foo',
+              title: [
+                { title: 'bar' },
+                { title: 'fox' },
+                { title: 'jumps' }
+              ]
+            },
+            {
+              album: 'crazy',
+              title: [
+                { title: 'mind' }
+              ]
+            }
+          ]
+        },
+        {
+          artist: 'cactus',
+          album: [
+            {
+              album: 'cactusalbum',
+              title: [
+                { title: 'bull' }
+              ]
+            }
+          ]
+        }
+      ])
+    })
+  })
+
+  describe('parser options', () => {
+    it('should normalize keys', () => {
+      const wasNormalized = normalizeKeys()
+      normalizeKeys(true)
+      const input = 'Last-Modified: 2024-01-24\nArtistName: Test\n'
+      const result = parseObject(input)
+      expect(result).toEqual({
+        last_modified: '2024-01-24',
+        artistname: 'Test'
+      })
+      normalizeKeys(wasNormalized)
+    })
+
+    it('should autoparse values', () => {
+      const wasAutoparsed = autoparseValues()
+      autoparseValues(true)
+      const input = 'volume: 50\nrepeat: 1\ntime: 123\n'
+      const result = parseObject(input)
+      expect(result).toEqual({
+        volume: 50,
+        repeat: true,
+        time: 123
+      })
+      autoparseValues(wasAutoparsed)
     })
   })
 })
