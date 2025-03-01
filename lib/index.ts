@@ -67,22 +67,26 @@ class MPDClient extends EventEmitter {
   }
 
   static connect(config?: MPDConfig): Promise<MPDClient> {
+    let configToUse: MPDConfig
+    
     if (!config || typeof config !== 'object') {
-      config = getDefaultConfig()
-      debugLog('connect: using config %o', config)
+      configToUse = getDefaultConfig()
+      debugLog('connect: using config %o', configToUse)
+    } else {
+      configToUse = config
     }
 
     // allow tilde shortcuts if connecting to a socket
-    if (isString(config.path) && config.path.startsWith('~')) {
-      config.path = config.path.replace(/^~/, os.homedir())
+    if (isString(configToUse.path) && configToUse.path.startsWith('~')) {
+      configToUse.path = configToUse.path.replace(/^~/, os.homedir())
     }
 
     const netConfig: net.NetConnectOpts = {
-      ...config,
-      port: config.port,
-      host: config.host,
-      path: config.path,
-      timeout: config.timeout || 2000
+      ...configToUse,
+      port: configToUse.port,
+      host: configToUse.host,
+      path: configToUse.path,
+      timeout: configToUse.timeout || 2000
     }
 
     const socket = net.connect(netConfig)
@@ -90,7 +94,7 @@ class MPDClient extends EventEmitter {
     socket.setTimeout(netConfig.timeout as number)
 
     return finalizeClientConnection(
-      new MPDClient(config), socket)
+      new MPDClient(configToUse), socket)
   }
 
   async sendCommand(command: string | Command): Promise<string> {
@@ -144,10 +148,11 @@ class MPDClient extends EventEmitter {
         return resolve()
       }
 
+      let resolved = false
       const _resolve = () => {
-        if (resolve) {
+        if (!resolved) {
+          resolved = true
           resolve()
-          resolve = null
         }
       }
 
