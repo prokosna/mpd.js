@@ -35,6 +35,7 @@ export interface ParseNestedListMemo<T = any> {
   objpath: T[]
   keypath: string[]
   list: T[]
+  delims: Record<string, boolean> | null
 }
 
 export interface ParseListAndAccumulateMemo<T = any> {
@@ -175,6 +176,33 @@ parseList.by = <T = Record<string, any>>(...delimiters: (string | string[] | Rec
 export const parseObject = <T = Record<string, any>>(msg: string): T | undefined =>
   parseList<T>(msg)[0]
 
+/**
+ * Parse the list, first item key indicates
+ * the unique key identifier, any subtiems
+ * will be nested within that object:
+ * artist: foo
+ * album: foo
+ * title: bar
+ * title: fox
+ * title: jumps
+ * album: crazy
+ * title: mind
+ * artist: cactus
+ * ablum: cactusalbum
+ * title: bull
+ * =>
+ * [ { artist: 'foo',
+ *     album:
+ *      [ { album: 'foo',
+ *          title:
+ *           [ { title: 'bar' },
+ *             { title: 'fox' },
+ *             { title: 'jumps' },
+ *             { title: 'mind' } ] },
+ *        { album: 'crazy' } ] },
+ *   { artist: 'cactus',
+ *     ablum: [ { ablum: 'cactusalbum', title: [ { title: 'bull' } ] } ] } ]
+ */
 export const parseNestedList = <T = Record<string, any>>(msg: string): T[] => msg
   .split('\n')
   .reduce((memo: ParseNestedListMemo<T>, line: string) => {
@@ -182,47 +210,43 @@ export const parseNestedList = <T = Record<string, any>>(msg: string): T[] => ms
       return memo
     }
 
+    let target: T[]
     const [key, val] = mpdLine2keyVal(line)
     const obj = { [key]: val } as T
-    const keyIdx = memo.keypath.indexOf(key)
 
-    let target: T[]
+    if (!memo.delims) {
+      memo.delims = { [key]: true }
+    }
 
-    // new top entry
-    if (keyIdx === 0) {
-      memo.list.push(obj)
+    // is this new entry of default type
+    if (memo.delims[key]) {
       memo.objpath = [obj]
-    } else if (keyIdx !== -1) {
-      let parent = memo.objpath[keyIdx - 1] as any
-      if (parent[key] === undefined) {
-        parent[key] = []
-      }
-
-      parent[key].push(obj)
-      memo.objpath[keyIdx] = obj
-
-      if (memo.objpath.length > keyIdx + 1) {
-        memo.objpath.length = keyIdx + 1
-      }
+      memo.keypath = [key]
+      target = memo.list
     } else {
-      target = memo.objpath[memo.objpath.length - 1] as any
-      if (target[key] === undefined) {
-        target[key] = val
-      } else if (target[key] !== val) {
-        if (Array.isArray(target[key])) {
-          target[key].push(val)
-        } else {
-          target[key] = [target[key], val]
-        }
+      const kpos = memo.keypath.indexOf(key)
+
+      // first entry of this sub type into the
+      // current item
+      if (kpos === -1) {
+        target = []
+        ;(memo.objpath[memo.objpath.length - 1] as any)[key] = target
+        memo.objpath.push(obj)
+        memo.keypath.push(key)
+      } else {
+        target = (memo.objpath[kpos - 1] as any)[key]
       }
     }
 
+    target.push(obj)
+
     return memo
   }, {
-    objpath: [],
-    keypath: [],
-    list: []
-  } as ParseNestedListMemo<T>)
+    delims: null as Record<string, boolean> | null,
+    objpath: [] as T[],
+    keypath: [] as string[],
+    list: [] as T[]
+  })
   .list
 
 /**
