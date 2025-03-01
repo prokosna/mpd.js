@@ -28,8 +28,8 @@
     "build:cjs": "tsc --project tsconfig.cjs.json",
     "build": "npm run build:esm && npm run build:cjs",
     "prepare": "npm run build",
-    "lint": "standard ./lib/**/*.ts",
-    "lintfix": "standard ./lib/**/*.ts --fix",
+    "lint": "biome lint ./lib/*.ts --write --unsafe",
+    "fmt": "biome format ./lib/*.ts --write",
     "test": "jest unit",
     "test:integration": "jest int",
     "test:coverage": "jest --coverage"
@@ -52,9 +52,9 @@
     "debug": "^4.4.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "1.9.4",
     "@types/jest": "^29.5.14",
     "jest": "^29.7.0",
-    "standard": "^17.1.2",
     "ts-jest": "^29.2.6",
     "typescript": "^5.8.2"
   }
