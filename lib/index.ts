@@ -93,11 +93,11 @@ class MPDClient extends EventEmitter {
       new MPDClient(config), socket)
   }
 
-  async sendCommand(command: string): Promise<string> {
+  async sendCommand(command: string | Command): Promise<string> {
     assert.ok(this.idling)
     const promise = this._enqueuePromise()
     this.stopIdling()
-    this.send(command)
+    this.send(typeof command === 'string' ? command : command.toString())
     this.setupIdling()
     return promise
   }
