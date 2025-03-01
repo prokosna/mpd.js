@@ -4,19 +4,17 @@ export class Command {
   readonly name: string
   readonly args: (string | number)[]
 
-  constructor(name: string, ...args: (string | number)[]) {
+  constructor(name: string, ...args: (string | number | (string | number)[])[]){
     if (args.length === 1 && Array.isArray(args[0])) {
-      args = args[0] as (string | number)[]
+      this.args = args[0] as (string | number)[]
+    } else {
+      this.args = args as (string | number)[]
     }
     this.name = name
-    this.args = args
     this.toString = this.toString.bind(this)
   }
 
-  static cmd(name: string, ...args: (string | number)[]): Command {
-    if (args.length === 1) {
-      return new Command(name, args[0])
-    }
+  static cmd(name: string, ...args: (string | number | (string | number)[])[]): Command {
     return new Command(name, ...args)
   }
 
