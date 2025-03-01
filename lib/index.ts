@@ -162,11 +162,19 @@ class MPDClient extends EventEmitter {
   }
 
   private _resolve(msg: string): void {
-    this._promiseQueue.shift()?.resolve(msg)
+    const item = this._promiseQueue.shift()
+    if (!item) {
+      throw new Error('Promise queue is empty')
+    }
+    item.resolve(msg)
   }
 
   private _reject(err: Error): void {
-    this._promiseQueue.shift()?.reject(err)
+    const item = this._promiseQueue.shift()
+    if (!item) {
+      throw new Error('Promise queue is empty')
+    }
+    item.reject(err)
   }
 
   private _receive(data: string): void {
