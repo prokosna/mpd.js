@@ -1,0 +1,30 @@
+name: Run Unit Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+      - run: npm ci
+      - run: npm run test:unit
+      - run: npm run lint
+      - run: npm run fmt
+      - name: Check for formatting changes
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "Formatting changes detected. Please run 'npm run fmt' locally and commit the changes."
+            git diff
+            exit 1
+          fi
