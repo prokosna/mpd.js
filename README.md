@@ -1,276 +1,182 @@
-## node mpd client
+# MPD Client for Node.js
+
+**This repository is still WIP**
+
+[![Build Status](https://github.com/prokosna/mpd.js/actions/workflows/test.yml/badge.svg)](https://github.com/prokosna/mpd.js/actions/workflows/test.yml)
+
+Connect to a [Music Player Daemon](https://musicpd.org) (MPD) server, send commands, and receive events.
+
+This library is a re-write version of the original [mpd.js (mpd2)](https://github.com/cotko/mpd.js) library, fully implemented in TypeScript and leveraging the **Web Streams API**. This design allows for efficient, non-blocking handling of MPD responses, even for large music libraries or playlists.
+
+## Installation
+
+```bash
+npm i prokosna/mpd.js
+```
+
+## Basic Usage
+
+```typescript
+import { MpdClient } from 'mpd3';
+
+async function main() {
+	// Connect to MPD server (defaults to localhost:6600)
+	const client = await MpdClient.connect({
+		host: "localhost",
+		port: 6600,
+	});
+
+	try {
+		console.log("Connected to MPD!");
+        console.log();
+
+		// Get current status - using sendCommand
+		const status = await client.sendCommand("status");
+		console.log("Status:", status);
+        console.log();
+
+		// Get current playlist info as a stream - using streamCommands
+		// This is a raw stream of lines fetched from MPD.
+		// OK and ACK are handled by stream's end and error events.
+		const playlistInfoStream = await client.streamCommands(["playlistinfo"]);
+		// Transform the stream into a list of objects
+		const playlistInfoListStream = playlistInfoStream.pipeThrough(
+			MpdParsers.transformToList({ delimiterKeys: "file" }),
+		);
+		// Transform the list of objects into a typed list
+		const playlistInfoTypedListStream = playlistInfoListStream.pipeThrough(
+			MpdParsers.transformToTyped(),
+		);
+		// Aggregate the list into an array
+		const playlistInfo = await MpdParsers.aggregateToList(
+			playlistInfoTypedListStream,
+		);
+		console.log("Playlist Info (Count):", playlistInfo.length); // Result is an array of track objects
+        console.log();
+
+		// Other transforms are available in MpdParsers
+		const listAllInfo = await client
+			.streamCommand("listallinfo")
+			.then((stream) =>
+				stream
+					.pipeThrough(
+						MpdParsers.transformToListAndAccumulate({
+							delimiterKeys: ["directory", "file"],
+						}),
+					)
+					.pipeThrough(MpdParsers.transformToTyped()),
+			)
+			.then(MpdParsers.aggregateToList);
+		console.log("List All Info (Count):", listAllInfo.length); // Result is an array of track objects
+        console.log();
 
-Connect to a [Music Player Daemon](https://musicpd.org) ([GIT](https://github.com/MusicPlayerDaemon/MPD)) server, send commands, emit events.
+		// Get object from stream
+		const stats = await client
+			.streamCommand("stats")
+			.then((stream) => stream.pipeThrough(MpdParsers.transformToObject()))
+			.then(MpdParsers.takeFirstObject);
+		console.log("Stats:", stats);
+        console.log();
 
-This is a rewrite of [mpd.js module](https://github.com/andrewrk/mpd.js) to promise based methods and support for parsing of various MPD responses.
+		// Listen for events
+		client.on("system", (subsystem) => {
+			console.log(`MPD subsystem changed: ${subsystem}`);
+		});
 
-For higher level API module check out [mpd-api](https://github.com/cotko/mpd-api).
+		// Stop track if playlist is not empty
+		if (playlistInfo.length > 0) {
+			await client.sendCommand("play 0");
+			console.log("Playback started.");
+		} else {
+			console.log("Playlist is empty, cannot start playback.");
+		}
+        console.log();
 
-### Usage
+		// Keep the script running to listen for events
+		console.log("Listening for MPD events... (Press Ctrl+C to exit)");
+	} catch (error) {
+		console.error("MPD Error:", error);
+	} finally {
+		process.on("SIGINT", async () => {
+			console.log("\nDisconnecting...");
+			await client.disconnect();
+			console.log("Disconnected from MPD.");
+			process.exit(0);
+		});
+	}
+}
 
-  ```
-  npm i / yarn mpd2
-  ```
+main().catch((err) => {
+	console.error("Unhandled error in main:", err);
+	process.exit(1);
+});
 
-  ```js
-  const mpd = require('mpd2')
-  const { cmd } = mpd
+```
 
-  // config is passed to net.connect()
-  const config = {
-    host: 'localhost',
-    port: 6600,
+## API
 
-    // if connecting to a local socket rather than
-    // host and port; trailing `~` is replaced by
-    // `os.homedir()`
-    // path: '~/.config/mpd/socket'
+### `MpdClient.connect(config?: Config): Promise<MpdClient>`
 
-    // if MPD requires a password, pass
-    // it within the config as well:
-    //password: 'password'
-  }
+*Static Method*
 
-  const client = await mpd.connect(config)
+Establishes connection(s) to the MPD server and returns a connected `MpdClient` instance. This is the primary way to create a client.
 
-  // without config will default to `localhost:6600`
-  // const client = await mpd.connect()
+**Options (`Config` type, extends `net.NetConnectOpts`):**
 
+*   `host` (string): MPD server hostname (default: `localhost`).
+*   `port` (number): MPD server port (default: `6600`).
+*   `password` (string): Optional MPD password.
+*   `timeout` (number): Connection timeout in milliseconds (default: `5000`).
+*   `poolSize` (number): Maximum number of connections in the pool (default: `3`).
+*   `reconnectDelay` (number): Time in milliseconds before attempting to reconnect (default: `5000`).
+*   `maxRetries` (number): Maximum number of reconnection attempts (default: `3`).
 
-  const status = await client.sendCommand('status').then(mpd.parseObject)
-  console.log(status)
+### `client.sendCommand(command: string | Command): Promise<string>`
 
-  client.on('close', () => {
-    console.log('client connection closed')
-  })
+Sends a command to the MPD server.
 
-  client.on('system', name => {
-    console.log('on system event: %s', name)
-  })
+*   **`command`**: The command string (e.g., `'status'`) or a `Command` object.
 
-  client.on('system-player', () => {
-    console.log('on system player event')
-  })
+**Returns:** A `Promise` resolving to the **full response string** aggregated from the server, including the final `OK` line.
 
-  await client.disconnect()
+### `client.sendCommands(commandList: (string | Command)[]): Promise<string>`
 
-  ```
+Sends multiple commands as a single [command list](https://mpd.readthedocs.io/en/latest/protocol.html#command-lists) to the MPD server.
 
-  ```ts
+*   **`commandList`**: An array of command strings or `Command` objects.
 
-  // typings included
+**Returns:** A `Promise` resolving to the **full response string** aggregated from the server for the entire command list.
 
-  import mpd, { MPD } from 'mpd2'
+### `client.streamCommand(command: string | Command): Promise<ReadableStream<ResponseLine>>`
 
-  type Status = {
-    volume: number
-    repeat: boolean
-    playlist: number
-    state: 'play' | 'stop' | 'pause'
-    // ...
-  }
+Sends a single command and returns the response as a `ReadableStream`.
 
-  type ListAllInfo = {
-    directory: string
-    last_modified: string
-    file?: File[]
-  }
+*   **`command`**: The command string or `Command` object.
 
-  type File = {
-    file: string
-    last_modified: string
-    format: string
-    time: number
-    artist: string
-    title: string
-    // ...
-  }
+**Returns:** A `Promise` resolving to a `ReadableStream` where each chunk is a `ResponseLine` object (`{ raw: string }` containing one line of the MPD response, excluding the final `OK`). Useful for processing large responses line by line.
 
-  const client: MPD.Client = await mpd.connect()
+### `client.streamCommands(commandList: (string | Command)[]): Promise<ReadableStream<ResponseLine>>`
 
-  const statusString = await client.sendCommand('status')
-  const status = mpd.parseObject<Status>(statusString)
+Sends multiple commands as a command list and returns the response as a `ReadableStream`.
 
-  console.log('state:', status.state)
+*   **`commandList`**: An array of command strings or `Command` objects.
 
-  const lsAllParser = mpd.parseListAndAccumulate<ListAllInfo>(['directory', 'file'])
-  const lsAllString = await client.sendCommand('listallinfo')
-  const lsAll = lsAllParser(lsAllString)
-  console.log('first directory: %s, files: %o', lsAll[0].directory, lsAll[0].file)
+**Returns:** A `Promise` resolving to a `ReadableStream` of `ResponseLine` objects for the entire command list response.
 
-  try {
+### `client.disconnect(): Promise<void>`
 
-    await client.sendCommands([
-      'status',
-      mpd.cmd('foo', 'bar')
-    ])
-  } catch (e) {
-    const err: MPD.MPDError = e
+Closes all connections to the MPD server, stops event monitoring, and cleans up resources.
 
-    switch (err.errno) {
-      case mpd.MPDError.CODES.UNKNOWN:
-        console.log('command does not exist')
-        break;
-      default:
-        console.log('some other error', err)
-        break;
-    }
-  }
+### `client.PROTOCOL_VERSION: string` (Getter)
 
-  ```
+Returns the MPD protocol version reported by the server during the initial connection.
 
-### Documentation
+## Events
 
-  See also the [MPD Protocol Documentation](https://www.musicpd.org/doc/html/protocol.html).
+The `MpdClient` instance extends `EventEmitter`.
 
-#### Client methods
+*   **`'system'** (subsystem: string)**: Emitted when MPD reports a change in one of its subsystems (e.g., `player`, `mixer`, `options`, `playlist`).
+*   **`'error'** (error: Error)**: Emitted when a connection or protocol error occurs within the connection pool or event monitoring.
+*   **`'close'`**: Emitted when the `disconnect()` method is called and the client finishes closing connections.
 
-* #### *async* client.sendCommand(command)
-
-  `command` can be a `MpdClient.Command` or a string, use *mpd.cmd* helper to construct the Command when using arguments:
-  ```js
-  
-  await client.sendCommand(mpd.cmd('setvol', [50]))
-  
-  // args can be overloaded as well, no need to pass them as array:
-  const searched = await client.sendCommand(
-    mpd.cmd('search', '(artist contains "Empire")', 'group', 'album'))
-  
-  ```
-
-* #### *async* client.sendCommands(commandList)
-  `commandList` will be wrapped between `command_list_begin` and `command_list_end` (see MPD documentation for more info)
-
-* #### *async* client.disconnect()
-
-  Disconnects the client.
-
-##### Static functions
-
-* #### *async* mpd.connect(options)
-
-  Connects to a MPD server and returns a client.
-  
-* #### mpd.cmd(name, [args]) or overloaded *mpd.cmd(name, ...args)*
-
-  Convert name/args pair into a Command.
-
-
-###### Parsers
-
-* #### mpd.normalizeKeys([bool])
-  Getter / setter to enable normalization of keys while parsing. MPD responses contains various keys, upper/lower/kebap cases, this setting normalizes all keys into *snake_case*.
-  
-  Turned on by default
-  
-* #### mpd.autoparseValues([bool])
-  Getter / setter to enable auto parsing of known values based on keys.
-  
-  Turned on by default
-
-* #### mpd.parseObject(msg)
-
-  `msg`: a string which contains an MPD response.
-  Returns an object.
-
-* #### mpd.parseList(msg, [delimiters])
-
-  `msg`: a string which contains an MPD response.
-  `delimiters`: which keys represent distinct object types within the response
-  
-  Returns an array, see source for more info
-
-* #### mpd.parseList.by(delimiters)
-
-  `delimiters`: a string or array of delimiters
-  
-  returns wrapped function `parser(msg)` which calls `parseList(msg, delimiters)`
-  
-  ```js
-  const songparser = mpd.parseList.by('file')
-  await client.sendCommand('listallinfo').then(songparser)
-  ```
-
-* #### mpd.parsNestedList(msg)
-
-  `msg`: a string which contains an MPD response.
-  
-  Parse the list response, first item key indicates the unique key identifier, any subtiems will be nested within that object. Returns an array of parsed objects. See source for more info.
-
-* #### mpd.parseListAndAccumulate(msg, path)
-
-  `msg`: a string which contains an MPD response.
-  `path`: array of nested objects
-  
-  Parse the list response and nest objects based on *path*. See source for more info.
-
-#### Events
-
-* #### close
-
-  The connection is closed.
-
-* #### system(systemName)
-
-  A system has updated. `systemName` is one of:
-
-  * `database` - the song database has been modified after update.
-  * `update` - a database update has started or finished. If the database was
-    modified during the update, the database event is also emitted.
-  * `stored_playlist` - a stored playlist has been modified, renamed, created
-    or deleted
-  * `playlist` - the current playlist has been modified
-  * `player` - the player has been started, stopped or seeked
-  * `mixer` - the volume has been changed
-  * `output` - an audio output has been enabled or disabled
-  * `options` - options like repeat, random, crossfade, replay gain
-  * `sticker` - the sticker database has been modified.
-  * `subscription` - a client has subscribed or unsubscribed to a channel
-  * `message` - a message was received on a channel this client is subscribed
-    to; this event is only emitted when the queue is empty
-
-* #### system-*
-
-  See above event. Each system name has its own event as well.
-
-#### Properties
-
-* #### client.PROTOCOL_VERSION
-
-  Protocol version returned by the MPD server after connection is established
-
-* #### mpd.MPDError
-
-  *MPDError.CODES* contains ACK codes map, as seen here [Ack.hxx](https://github.com/MusicPlayerDaemon/MPD/blob/master/src/protocol/Ack.hxx)
-
-  ```js
-  MPDError.CODES = {
-    NOT_LIST: 1,
-    ARG: 2,
-    PASSWORD: 3,
-    PERMISSION: 4,
-    UNKNOWN: 5,
-
-    NO_EXIST: 50,
-    PLAYLIST_MAX: 51,
-    SYSTEM: 52,
-    PLAYLIST_LOAD: 53,
-    UPDATE_ALREADY: 54,
-    PLAYER_SYNC: 55,
-    EXIST: 56
-  }
-  ```
-  
-  All errors thrown by MPD are converted into MPDError isntance:
-  ```js
-  // MPD ACK line looks like
-  'ACK [error@command_listNum] {current_command} message_text'
-  
-  err.code = 'ARG' // one of CODES
-  err.errno = 2 // for CODES.ARG
-  err.message = 'whatever mpd returned'
-  err.cmd_list_num = x // whatever MPD returned as listNum found in MPD ACK line
-  err.current_command = 'which command this error relates to' // found by MPD ACK line
-  ```
-
-
+*(Note: A specific 'ready' event after connection is not explicitly emitted by the client itself, but the Promise returned by `MpdClient.connect()` resolves when the client is ready.)*
