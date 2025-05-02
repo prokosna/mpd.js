@@ -12,6 +12,6 @@
     "moduleResolution": "node",
     "resolveJsonModule": true
   },
-  "include": ["lib/*.ts", "__tests__/*.ts"],
+  "include": ["lib/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
