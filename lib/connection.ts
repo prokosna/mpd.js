@@ -24,17 +24,21 @@ const debug = debugCreator(`${PACKAGE_NAME}:connection`);
  * Represents a single connection to an MPD server.
  * Manages the socket connection, command execution, and response parsing.
  */
-export class Connection {
+export class Connection extends EventEmitter {
 	private readonly id: string;
 	readonly socket: Socket;
 	private readonly mpdVersion: string;
 	private busy: boolean;
+	private isExecutingCommand: boolean;
+	private readonly COMMAND_EXECUTION_FINISHED = "COMMAND_EXECUTION_FINISHED";
 
 	private constructor(id: string, socket: Socket, mpdVersion: string) {
+		super();
 		this.id = id;
 		this.socket = socket;
 		this.mpdVersion = mpdVersion;
 		this.busy = false;
+		this.isExecutingCommand = false;
 	}
 
 	/**
@@ -132,6 +136,7 @@ export class Connection {
 	 * @returns A ReadableStream that yields response lines until the command completes or fails.
 	 */
 	executeCommand(command: string | Command): ReadableStream<ResponseLine> {
+		this.isExecutingCommand = true;
 		const commandStr = `${command}\n`;
 		let buffer = "";
 		const decoder = new StringDecoder("utf8");
@@ -168,11 +173,15 @@ export class Connection {
 						debug("Command successful (OK)");
 						cleanupListeners();
 						controller.close();
+						this.isExecutingCommand = false;
+						this.emit(this.COMMAND_EXECUTION_FINISHED);
 					} else if (rawLine.startsWith(ACK_PREFIX)) {
 						debug(`Command failed (ACK): ${rawLine}`);
 						const error = new MpdError(rawLine);
 						cleanupListeners();
 						controller.error(error);
+						this.isExecutingCommand = false;
+						this.emit(this.COMMAND_EXECUTION_FINISHED);
 					} else {
 						controller.enqueue(line);
 					}
@@ -358,6 +367,20 @@ export class Connection {
 	isSocketDestroyed(): boolean {
 		return this.socket.destroyed;
 	}
+
+	/**
+	 * Waits for the current command execution to finish.
+	 * @returns A promise that resolves when the current command execution is finished.
+	 */
+	waitForCommandExecutionFinished(): Promise<void> {
+		return new Promise((resolve) => {
+			if (!this.isExecutingCommand) {
+				resolve();
+				return;
+			}
+			this.once(this.COMMAND_EXECUTION_FINISHED, resolve);
+		});
+	}
 }
 
 /**
@@ -386,10 +409,11 @@ export class ConnectionPool extends EventEmitter {
 	 * Emits 'connectionAvailable' event.
 	 * @param connection - The connection to release.
 	 */
-	releaseConnection(connection: Connection): void {
+	async releaseConnection(connection: Connection): Promise<void> {
 		for (const [key, c] of this.connections.entries()) {
 			if (c === connection) {
 				if (connection.isBusy()) {
+					await connection.waitForCommandExecutionFinished();
 					debug(`Releasing connection: ${key}`);
 					connection.setBusy(false);
 					this.emit(EVENT_CONNECTION_AVAILABLE);

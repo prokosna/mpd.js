@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import type { Command } from "./command.js";
 import { ConnectionPool } from "./connection.js";
-import { CommandQueue } from "./queue.js";
+import { CommandExecutor } from "./executor.js";
 import { EventManager } from "./event.js";
 import type { ReadableStream } from "node:stream/web";
 import type { ResponseLine } from "./types.js";
@@ -58,7 +58,7 @@ function applyDefaultValuesIfNotSet(config: Config): Config {
  */
 export class MpdClient extends EventEmitter {
 	private connectionPool: ConnectionPool;
-	private commandQueue: CommandQueue;
+	private commandExecutor: CommandExecutor;
 	private eventManager: EventManager;
 	private mpdVersion = "unknown";
 
@@ -69,7 +69,7 @@ export class MpdClient extends EventEmitter {
 	private constructor(config: Config) {
 		super();
 		this.connectionPool = new ConnectionPool(config);
-		this.commandQueue = new CommandQueue(this.connectionPool);
+		this.commandExecutor = new CommandExecutor(this.connectionPool);
 		this.eventManager = new EventManager(this, this.connectionPool);
 	}
 
@@ -105,8 +105,8 @@ export class MpdClient extends EventEmitter {
 	 */
 	async sendCommand(command: string | Command): Promise<string> {
 		debug("Sending command: %o", command);
-		return this.commandQueue
-			.enqueue(command)
+		return this.commandExecutor
+			.execute(command)
 			.then(MpdParsers.aggregateToString)
 			.then((str) => [str, OK].filter(Boolean).join("\n"));
 	}
@@ -118,8 +118,8 @@ export class MpdClient extends EventEmitter {
 	 */
 	async sendCommands(commandList: (string | Command)[]): Promise<string> {
 		debug("Sending commands: %o", commandList);
-		return this.commandQueue
-			.enqueue(commandList)
+		return this.commandExecutor
+			.execute(commandList)
 			.then(MpdParsers.aggregateToString)
 			.then((str) => [str, OK].filter(Boolean).join("\n"));
 	}
@@ -134,7 +134,7 @@ export class MpdClient extends EventEmitter {
 		command: string | Command,
 	): Promise<ReadableStream<ResponseLine>> {
 		debug("Streaming command: %o", command);
-		return this.commandQueue.enqueue(command);
+		return this.commandExecutor.execute(command);
 	}
 
 	/**
@@ -147,7 +147,7 @@ export class MpdClient extends EventEmitter {
 		commandList: (string | Command)[],
 	): Promise<ReadableStream<ResponseLine>> {
 		debug("Streaming commands: %o", commandList);
-		return this.commandQueue.enqueue(commandList);
+		return this.commandExecutor.execute(commandList);
 	}
 
 	/**
