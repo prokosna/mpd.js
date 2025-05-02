@@ -314,7 +314,7 @@ export namespace MpdParsers {
 	/**
 	 * Consumes a ReadableStream and returns the *first* item emitted by it.
 	 * Useful for streams expected to yield only one object, like the output of `transformToObject`.
-	 * Throws an error if the stream completes without emitting any items.
+	 * Returns undefined if the stream completes without emitting any items.
 	 *
 	 * @template T The type of item in the stream.
 	 * @param stream - The ReadableStream to consume.
@@ -322,25 +322,25 @@ export namespace MpdParsers {
 	 */
 	export async function takeFirstObject<T>(
 		stream: ReadableStream<T>,
-	): Promise<T> {
+	): Promise<T | undefined> {
 		for await (const item of stream) {
 			return item;
 		}
-		throw new Error("No valid object found in stream");
+		return undefined;
 	}
 
 	/**
 	 * Consumes a ReadableStream of `ResponseLine` and returns the *value*
 	 * of the first key-value pair encountered.
 	 * Useful for commands that return a single value, like `count`.
-	 * Throws an error if the stream completes without emitting a valid key-value line.
+	 * Returns undefined if the stream completes without emitting a valid key-value line.
 	 *
 	 * @param stream - The ReadableStream of ResponseLine to consume.
 	 * @returns A promise that resolves with the string value of the first line.
 	 */
 	export async function takeFirstLineValue(
 		stream: ReadableStream<ResponseLine>,
-	): Promise<string> {
+	): Promise<string | undefined> {
 		for await (const line of stream) {
 			const kvPair = parseLineToKeyValue(line.raw);
 			if (kvPair) {
@@ -348,26 +348,26 @@ export namespace MpdParsers {
 			}
 			break;
 		}
-		throw new Error("No valid line found in stream");
+		return undefined;
 	}
 
 	/**
 	 * Consumes a ReadableStream of `ResponseLine` and returns the *binary data*
 	 * associated with the first line that contains it.
 	 * Primarily used for commands like `readpicture` or `albumart`.
-	 * Throws an error if the stream completes without emitting any binary data.
+	 * Returns undefined if the stream completes without emitting any binary data.
 	 *
 	 * @param stream - The ReadableStream of ResponseLine to consume.
 	 * @returns A promise that resolves with the Buffer containing the binary data.
 	 */
 	export async function takeFirstBinary(
 		stream: ReadableStream<ResponseLine>,
-	): Promise<Buffer> {
+	): Promise<Buffer | undefined> {
 		for await (const line of stream) {
 			if (line.binaryData) {
 				return line.binaryData;
 			}
 		}
-		throw new Error("No binary data found in stream");
+		return undefined;
 	}
 }
