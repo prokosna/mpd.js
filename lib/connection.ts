@@ -121,7 +121,10 @@ export class Connection extends EventEmitter {
 				resolve();
 				return;
 			}
-			this.socket.once("close", () => resolve());
+			this.socket.once("close", () => {
+				this.socket.removeAllListeners("error");
+				resolve();
+			});
 			this.socket.once("error", (err) => {
 				console.error(`Error during socket disconnection: ${err}`);
 			});
@@ -142,23 +145,23 @@ export class Connection extends EventEmitter {
 		const decoder = new StringDecoder("utf8");
 		let isCleanedUp = false;
 
+		const cleanupListeners = () => {
+			if (isCleanedUp) return;
+			isCleanedUp = true;
+			this.socket.removeAllListeners("data");
+			this.socket.removeAllListeners("error");
+			this.socket.removeAllListeners("close");
+			const remaining = decoder.end();
+			if (remaining) {
+				debug("StringDecoder flushed remaining bytes during cleanup");
+			}
+			this.isExecutingCommand = false;
+			this.emit(this.COMMAND_EXECUTION_FINISHED);
+		};
+
 		const stream = new ReadableStream<ResponseLine>({
 			start: (controller) => {
 				debug(`Executing command: ${commandStr.trim()}`);
-
-				const cleanupListeners = () => {
-					if (isCleanedUp) return;
-					isCleanedUp = true;
-					this.socket.off("data", dataListener);
-					this.socket.off("error", errorListener);
-					this.socket.off("close", closeListener);
-					const remaining = decoder.end();
-					if (remaining) {
-						debug(
-							`StringDecoder flushed remaining bytes during cleanup: ${remaining}`,
-						);
-					}
-				};
 
 				let mode: "text" | "binary" = "text";
 				let expectedBinaryBytes = 0;
@@ -171,17 +174,13 @@ export class Connection extends EventEmitter {
 
 					if (rawLine === OK) {
 						debug("Command successful (OK)");
-						cleanupListeners();
 						controller.close();
-						this.isExecutingCommand = false;
-						this.emit(this.COMMAND_EXECUTION_FINISHED);
+						cleanupListeners();
 					} else if (rawLine.startsWith(ACK_PREFIX)) {
 						debug(`Command failed (ACK): ${rawLine}`);
 						const error = new MpdError(rawLine);
-						cleanupListeners();
 						controller.error(error);
-						this.isExecutingCommand = false;
-						this.emit(this.COMMAND_EXECUTION_FINISHED);
+						cleanupListeners();
 					} else {
 						controller.enqueue(line);
 					}
@@ -309,6 +308,7 @@ export class Connection extends EventEmitter {
 			},
 			cancel: (reason) => {
 				debug(`Stream cancelled: ${reason}`);
+				cleanupListeners();
 			},
 		});
 
