@@ -40,9 +40,6 @@ export class CommandQueue {
 	 */
 	constructor(connectionPool: ConnectionPool) {
 		this.connectionPool = connectionPool;
-		this.connectionPool.on(EVENT_CONNECTION_AVAILABLE, () => {
-			queueMicrotask(() => this.processQueue());
-		});
 	}
 
 	/**
@@ -87,16 +84,11 @@ export class CommandQueue {
 	 * Processes the command queue.
 	 * Attempts to dequeue the highest priority item and execute it using an
 	 * available connection from the pool. This method is triggered automatically
-	 * when commands are enqueued or when connections become available.
+	 * when commands are enqueued.
 	 */
 	private async processQueue(): Promise<void> {
 		if (this.queue.length === 0) {
 			debug("Queue is empty, skipping processing.");
-			return;
-		}
-
-		if (this.connectionPool.getAvailableCount() === 0) {
-			debug("No available connections, skipping processing.");
 			return;
 		}
 

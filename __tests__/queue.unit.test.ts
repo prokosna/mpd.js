@@ -21,7 +21,6 @@ const mockConnection = {
 } as unknown as Mocked<Connection>;
 
 const mockGetConnection = vi.fn<() => Promise<Connection>>();
-const mockGetAvailableCount = vi.fn<() => number>();
 const mockReleaseConnection = vi.fn<(connection: Connection) => void>();
 const mockOn = vi.fn();
 const mockOff = vi.fn();
@@ -32,7 +31,6 @@ vi.mock("../lib/connection", () => {
 		ConnectionPool: vi.fn().mockImplementation((config) => {
 			return {
 				getConnection: mockGetConnection,
-				getAvailableCount: mockGetAvailableCount,
 				releaseConnection: mockReleaseConnection,
 				on: mockOn,
 				off: mockOff,
@@ -53,7 +51,6 @@ describe("CommandQueue Unit Tests", () => {
 		vi.clearAllMocks();
 
 		mockGetConnection.mockResolvedValue(mockConnection);
-		mockGetAvailableCount.mockReturnValue(1);
 		const emptyStream = new ReadableStream<ResponseLine>();
 		mockExecuteCommand.mockResolvedValue(emptyStream);
 		mockExecuteCommands.mockResolvedValue(emptyStream);
@@ -68,18 +65,7 @@ describe("CommandQueue Unit Tests", () => {
 			commandQueue.enqueue("status");
 			await yieldExecution();
 
-			expect(mockGetAvailableCount).toHaveBeenCalled();
 			expect(mockGetConnection).toHaveBeenCalledTimes(1);
-		});
-
-		it("should not request a connection if none are available", async () => {
-			mockGetAvailableCount.mockReturnValue(0);
-
-			commandQueue.enqueue("status");
-			await yieldExecution();
-
-			expect(mockGetAvailableCount).toHaveBeenCalled();
-			expect(mockGetConnection).not.toHaveBeenCalled();
 		});
 
 		it("should send the command using the obtained connection", async () => {
