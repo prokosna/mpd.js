@@ -14,10 +14,10 @@ export interface CommandItem {
 	/** The MPD command(s) to be executed. Can be a single command string,
 	 * a Command object, or an array of either for command lists. */
 	commands: string | Command | (string | Command)[];
-	/** The resolve function of the Promise associated with this queue item.
+	/** The resolve function of the Promise associated with this command item.
 	 * Called with the response stream upon successful execution. */
 	resolve: (data: ReadableStream<ResponseLine>) => void;
-	/** The reject function of the Promise associated with this queue item.
+	/** The reject function of the Promise associated with this command item.
 	 * Called with an error if execution fails. */
 	// biome-ignore lint/suspicious/noExplicitAny: built-in Promise reject
 	reject: (reason?: any) => void;
