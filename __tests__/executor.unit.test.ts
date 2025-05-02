@@ -1,4 +1,4 @@
-import { CommandQueue } from "../lib/queue";
+import { CommandExecutor } from "../lib/executor";
 import { ConnectionPool } from "../lib/connection";
 import type { Connection } from "../lib/connection";
 import { Command } from "../lib/command";
@@ -44,7 +44,7 @@ vi.mock("../lib/connection", () => {
 const yieldExecution = () => new Promise((resolve) => setImmediate(resolve));
 
 describe("CommandQueue Unit Tests", () => {
-	let commandQueue: CommandQueue;
+	let commandQueue: CommandExecutor;
 	let mockPoolInstance: Mocked<ConnectionPool>;
 
 	beforeEach(() => {
@@ -57,12 +57,12 @@ describe("CommandQueue Unit Tests", () => {
 
 		const mockConfig = { host: "mockhost", port: 6600 };
 		mockPoolInstance = new ConnectionPool(mockConfig) as Mocked<ConnectionPool>;
-		commandQueue = new CommandQueue(mockPoolInstance);
+		commandQueue = new CommandExecutor(mockPoolInstance);
 	});
 
 	describe("Processing Queue", () => {
-		it("should request a connection when a command is enqueued and queue was empty", async () => {
-			commandQueue.enqueue("status");
+		it("should request a connection when a command is executed and pool is empty", async () => {
+			commandQueue.execute("status");
 			await yieldExecution();
 
 			expect(mockGetConnection).toHaveBeenCalledTimes(1);
@@ -70,7 +70,7 @@ describe("CommandQueue Unit Tests", () => {
 
 		it("should send the command using the obtained connection", async () => {
 			const cmd = new Command("status");
-			commandQueue.enqueue(cmd);
+			commandQueue.execute(cmd);
 			await yieldExecution();
 
 			expect(mockGetConnection).toHaveBeenCalledTimes(1);
@@ -80,7 +80,7 @@ describe("CommandQueue Unit Tests", () => {
 
 		it("should send multiple commands using sendCommands", async () => {
 			const commands = [new Command("play"), new Command("pause")];
-			commandQueue.enqueue(commands);
+			commandQueue.execute(commands);
 			await yieldExecution();
 
 			expect(mockGetConnection).toHaveBeenCalledTimes(1);
@@ -93,7 +93,7 @@ describe("CommandQueue Unit Tests", () => {
 			const mockSuccessResponse = new ReadableStream<ResponseLine>();
 			mockExecuteCommand.mockResolvedValue(mockSuccessResponse);
 
-			const enqueuePromise = commandQueue.enqueue("status");
+			const enqueuePromise = commandQueue.execute("status");
 			await yieldExecution();
 
 			await expect(enqueuePromise).resolves.toBe(mockSuccessResponse);
@@ -108,7 +108,7 @@ describe("CommandQueue Unit Tests", () => {
 				throw mockError;
 			});
 
-			const enqueuePromise = commandQueue.enqueue("status");
+			const enqueuePromise = commandQueue.execute("status");
 			await expect(enqueuePromise).rejects.toThrow(mockError);
 
 			await yieldExecution();
@@ -122,36 +122,12 @@ describe("CommandQueue Unit Tests", () => {
 			const mockGetConnectionError = new Error("Pool is full");
 			mockGetConnection.mockRejectedValue(mockGetConnectionError);
 
-			const enqueuePromise = commandQueue.enqueue("status");
+			const enqueuePromise = commandQueue.execute("status");
 
 			await expect(enqueuePromise).rejects.toThrow(mockGetConnectionError);
 			expect(mockReleaseConnection).not.toHaveBeenCalled();
 
 			mockGetConnection.mockResolvedValue(mockConnection);
-		});
-
-		it("should process commands based on priority", async () => {
-			const lowCmd = new Command("listallinfo");
-			const midCmd = new Command("status");
-			const highCmd = new Command("ping");
-
-			mockExecuteCommand.mockResolvedValue(new ReadableStream<ResponseLine>());
-			mockExecuteCommands.mockResolvedValue(new ReadableStream<ResponseLine>());
-
-			const pMid = commandQueue.enqueue(midCmd, 5);
-			const pLow = commandQueue.enqueue(lowCmd, 1);
-			const pHigh = commandQueue.enqueue(highCmd, 10);
-
-			await Promise.all([pMid, pLow, pHigh]);
-
-			expect(mockExecuteCommand).toHaveBeenCalledTimes(3);
-
-			const calls = mockExecuteCommand.mock.calls;
-			expect(calls[0][0]).toBe(highCmd);
-			expect(calls[1][0]).toBe(midCmd);
-			expect(calls[2][0]).toBe(lowCmd);
-
-			expect(mockReleaseConnection).toHaveBeenCalledTimes(3);
 		});
 	});
 });
