@@ -2,36 +2,34 @@ import { CommandQueue } from "../lib/queue";
 import { ConnectionPool } from "../lib/connection";
 import type { Connection } from "../lib/connection";
 import { Command } from "../lib/command";
-import { jest } from "@jest/globals";
 import { ReadableStream } from "node:stream/web";
 import type { ResponseLine } from "../lib/types";
+import { beforeEach, describe, expect, it, type Mocked, vi } from "vitest";
 
 const mockExecuteCommand =
-	jest.fn<
-		(command: string | Command) => Promise<ReadableStream<ResponseLine>>
-	>();
+	vi.fn<(command: string | Command) => Promise<ReadableStream<ResponseLine>>>();
 const mockExecuteCommands =
-	jest.fn<
+	vi.fn<
 		(commands: (string | Command)[]) => Promise<ReadableStream<ResponseLine>>
 	>();
-const mockIsConnected = jest.fn<() => boolean>().mockReturnValue(true);
+const mockIsConnected = vi.fn<() => boolean>().mockReturnValue(true);
 
 const mockConnection = {
 	executeCommand: mockExecuteCommand,
 	executeCommands: mockExecuteCommands,
 	isConnected: mockIsConnected,
-} as unknown as jest.Mocked<Connection>;
+} as unknown as Mocked<Connection>;
 
-const mockGetConnection = jest.fn<() => Promise<Connection>>();
-const mockGetAvailableCount = jest.fn<() => number>();
-const mockReleaseConnection = jest.fn<(connection: Connection) => void>();
-const mockOn = jest.fn();
-const mockOff = jest.fn();
-const mockEmit = jest.fn();
+const mockGetConnection = vi.fn<() => Promise<Connection>>();
+const mockGetAvailableCount = vi.fn<() => number>();
+const mockReleaseConnection = vi.fn<(connection: Connection) => void>();
+const mockOn = vi.fn();
+const mockOff = vi.fn();
+const mockEmit = vi.fn();
 
-jest.mock("../lib/connection", () => {
+vi.mock("../lib/connection", () => {
 	return {
-		ConnectionPool: jest.fn().mockImplementation((config) => {
+		ConnectionPool: vi.fn().mockImplementation((config) => {
 			return {
 				getConnection: mockGetConnection,
 				getAvailableCount: mockGetAvailableCount,
@@ -49,10 +47,10 @@ const yieldExecution = () => new Promise((resolve) => setImmediate(resolve));
 
 describe("CommandQueue Unit Tests", () => {
 	let commandQueue: CommandQueue;
-	let mockPoolInstance: jest.Mocked<ConnectionPool>;
+	let mockPoolInstance: Mocked<ConnectionPool>;
 
 	beforeEach(() => {
-		jest.clearAllMocks();
+		vi.clearAllMocks();
 
 		mockGetConnection.mockResolvedValue(mockConnection);
 		mockGetAvailableCount.mockReturnValue(1);
@@ -61,9 +59,7 @@ describe("CommandQueue Unit Tests", () => {
 		mockExecuteCommands.mockResolvedValue(emptyStream);
 
 		const mockConfig = { host: "mockhost", port: 6600 };
-		mockPoolInstance = new ConnectionPool(
-			mockConfig,
-		) as jest.Mocked<ConnectionPool>;
+		mockPoolInstance = new ConnectionPool(mockConfig) as Mocked<ConnectionPool>;
 		commandQueue = new CommandQueue(mockPoolInstance);
 	});
 

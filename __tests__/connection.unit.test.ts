@@ -1,403 +1,314 @@
-import { jest } from "@jest/globals";
 import { EventEmitter } from "node:events";
-import type { SocketConnectOpts } from "node:net";
-import { Connection, ConnectionPool } from "../lib/connection";
-import type { Config } from "../lib/client";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
+import type { NetConnectOpts, Socket } from "node:net";
 import { OK, ACK_PREFIX } from "../lib/const";
-import { MpdError } from "../lib/error";
-import net from "node:net";
+import { Connection } from "../lib/connection";
 import { escapeArg } from "../lib/parserUtils";
+import { MpdError } from "../lib/error";
 
-// mockSocketInstance is defined and managed in beforeEach/afterEach
-let mockSocketInstance: MockSocket | null;
-
-type ConnectCallback = () => void;
-type WriteCallback = (err?: Error) => void;
-type EndCallback = () => void;
-type DestroyCallback = (err?: Error) => void;
-
-class MockSocket extends EventEmitter {
-	destroyed = false;
-
-	connect = jest
-		.fn<
-			(options: SocketConnectOpts, connectionListener?: ConnectCallback) => this
-		>()
-		.mockImplementation(
-			(options: SocketConnectOpts, callback?: ConnectCallback) => {
-				process.nextTick(() => {
-					this.emit("connect");
-					if (callback) callback();
-				});
-				return this;
-			},
-		);
-
-	write = jest
-		.fn<
-			(
-				chunk: string | Uint8Array,
-				encodingOrCb?: BufferEncoding | WriteCallback | undefined,
-				cb?: WriteCallback | undefined,
-			) => boolean
-		>()
-		.mockImplementation(
-			(
-				data: string | Uint8Array,
-				encodingOrCb?: BufferEncoding | WriteCallback,
-				callback?: WriteCallback,
-			) => {
-				const actualCallback =
-					typeof encodingOrCb === "function" ? encodingOrCb : callback;
-				if (actualCallback) process.nextTick(actualCallback);
-				return true;
-			},
-		);
-
-	end = jest
-		.fn<(cb?: () => void) => this>()
-		.mockImplementation((callback?: EndCallback) => {
-			process.nextTick(() => {
-				if (!this.destroyed) {
-					this.emit("close", false);
-				}
-				if (callback) callback();
-			});
-			return this;
+// --- Mock Socket Implementation ---
+class SimpleMockSocket extends EventEmitter {
+	connect = vi.fn().mockImplementation((_opts, callback) => {
+		process.nextTick(() => {
+			this.emit("connect");
+			if (callback) callback();
 		});
-
-	destroy = jest
-		.fn<(error?: Error, callback?: DestroyCallback) => this>()
-		.mockImplementation((error?: Error, callback?: DestroyCallback) => {
-			if (!this.destroyed) {
-				this.destroyed = true;
-				process.nextTick(() => {
-					if (error) {
-						this.emit("error", error);
-					}
-					this.emit("close", !!error);
-					if (callback) callback(error);
-				});
-			} else if (callback) {
-				process.nextTick(callback, error);
-			}
-			return this;
-		});
-
-	setEncoding = jest
-		.fn<(encoding: BufferEncoding) => this>()
-		.mockImplementation((encoding: BufferEncoding) => {
-			return this;
-		});
-
-	simulateData(data: string): void {
-		this.emit("data", Buffer.from(data));
-	}
-
-	simulateError(error: Error): void {
-		this.emit("error", error);
-	}
-
-	simulateClose(hadError = false): void {
-		if (this.destroyed) return;
-		this.destroy(
-			hadError ? new Error("Simulated close with error") : undefined,
-		);
-	}
-
-	removeAllListeners(): this {
 		return this;
-	}
+	});
+	write = vi.fn();
+	end = vi.fn().mockImplementation(() => {
+		process.nextTick(() => this.emit("close"));
+		return this;
+	});
+	destroy = vi.fn().mockImplementation((err?: Error) => {
+		if (err) {
+			// Ensure error emits *before* close if an error is passed
+			process.nextTick(() => this.emit("error", err));
+		}
+		process.nextTick(() => this.emit("close"));
+		return this;
+	});
+	setEncoding = vi.fn(() => this);
+	simulateData = (data: string) => {
+		this.emit("data", Buffer.from(data));
+	};
+	simulateError = (err: Error) => {
+		this.emit("error", err);
+	};
+	removeAllListeners = vi.fn(() => this);
+	ref = vi.fn(() => this);
+	unref = vi.fn(() => this);
+	once = vi.fn().mockImplementation((event, listener) => {
+		super.once(event, listener);
+		return this;
+	});
 }
 
-// Keep track of sockets created by the mock
-let activeMockSockets: MockSocket[] = [];
+let lastCreatedSocket: SimpleMockSocket | null = null;
 
-// --- Mock node:net --- BEFORE describe block
-jest.mock("node:net", () => ({
-	createConnection: jest.fn().mockImplementation(() => {
-		const newSocket = new MockSocket();
-		activeMockSockets.push(newSocket);
-		mockSocketInstance = newSocket;
-		return newSocket as unknown as net.Socket;
-	}),
-	Socket: (jest.requireActual("node:net") as typeof net).Socket,
-}));
-// ---------------------
+// --- Hoisted Mock ---
+const mocks = vi.hoisted(() => {
+	const mockCreateConnectionFn = (config: NetConnectOpts): Socket => {
+		const socket = new SimpleMockSocket();
+		lastCreatedSocket = socket;
+		process.nextTick(() => socket.emit("connect"));
+		return socket as unknown as Socket;
+	};
+	return {
+		mockCreateConnection: vi.fn(mockCreateConnectionFn),
+	};
+});
 
-describe("Connection", () => {
-	const options: Config = { host: "mockhost", port: 6600 };
+// --- Mock 'node:net' ---
+vi.mock("node:net", () => {
+	return {
+		__esModule: true,
+		createConnection: mocks.mockCreateConnection,
+	};
+});
 
+describe("Connection (Expanded Mock Tests)", () => {
 	beforeEach(() => {
-		jest.clearAllMocks();
-		activeMockSockets = []; // Clear tracked sockets before each Connection test
-		(net.createConnection as jest.Mock)();
-		if (!mockSocketInstance) {
-			throw new Error("mockSocketInstance was not set by the mock");
-		}
-		activeMockSockets = [mockSocketInstance]; // Keep only the one created for this test
+		vi.clearAllMocks();
+		lastCreatedSocket = null;
+		vi.useRealTimers();
 	});
 
 	afterEach(() => {
-		mockSocketInstance?.removeAllListeners();
-		mockSocketInstance?.destroy();
-		mockSocketInstance = null;
+		vi.useRealTimers();
 	});
 
-	it("Connection.connect(): should connect and resolve with Connection instance on OK", async () => {
-		const connectPromise = Connection.connect(options);
+	it("should connect, handle handshake, and resolve", async () => {
+		const connectPromise = Connection.connect({
+			host: "localhost",
+			port: 6600,
+		});
 
-		mockSocketInstance?.simulateData(`${OK} MPD 0.23.5\n`);
+		expect(mocks.mockCreateConnection).toHaveBeenCalledTimes(1);
+		expect(mocks.mockCreateConnection).toHaveBeenCalledWith({
+			host: "localhost",
+			port: 6600,
+		});
+		expect(lastCreatedSocket).toBeInstanceOf(SimpleMockSocket);
+		if (!lastCreatedSocket) throw new Error("Socket mock not created");
 
+		lastCreatedSocket.simulateData(`${OK} MPD 0.23.5\n`);
 		const connection = await connectPromise;
 
 		expect(connection).toBeInstanceOf(Connection);
 		expect(connection.getMpdVersion()).toBe("0.23.5");
-
-		connection.disconnect();
+		expect(lastCreatedSocket.removeAllListeners).toHaveBeenCalledWith("error");
+		expect(lastCreatedSocket.removeAllListeners).toHaveBeenCalledWith("close");
 	});
 
-	it("Connection.connect(): should send password command if password is provided", async () => {
-		const password = "testpassword";
-		const configWithPass: Config = { ...options, password };
-		const connectPromise = Connection.connect(configWithPass);
+	it("should connect with password successfully", async () => {
+		const config = { host: "localhost", port: 6600, password: "testPassword" };
+		const connectPromise = Connection.connect(config);
 
-		mockSocketInstance?.simulateData(`${OK} MPD 0.23.5\n`);
+		expect(mocks.mockCreateConnection).toHaveBeenCalledTimes(1);
+		expect(lastCreatedSocket).toBeInstanceOf(SimpleMockSocket);
+		if (!lastCreatedSocket) throw new Error("Socket mock not created");
 
-		expect(mockSocketInstance?.write).toHaveBeenCalledWith(
-			`password ${escapeArg(password)}\n`,
+		lastCreatedSocket.simulateData(`${OK} MPD 0.23.5\n`);
+		await Promise.resolve();
+
+		expect(lastCreatedSocket.write).toHaveBeenCalledTimes(1);
+		expect(lastCreatedSocket.write).toHaveBeenCalledWith(
+			`password ${escapeArg(config.password)}\n`,
 			"utf8",
 		);
 
-		await expect(connectPromise).resolves.toBeInstanceOf(Connection);
-
+		lastCreatedSocket.simulateData(`${OK}\n`);
 		const connection = await connectPromise;
-		connection.disconnect();
+
+		expect(connection).toBeInstanceOf(Connection);
+		expect(connection.getMpdVersion()).toBe("0.23.5");
+		expect(lastCreatedSocket.removeAllListeners).toHaveBeenCalledWith("error");
+		expect(lastCreatedSocket.removeAllListeners).toHaveBeenCalledWith("close");
 	});
 
-	it("Connection.connect(): should reject if socket emits error during connect", async () => {
-		const error = new Error("Connection refused");
-		const connectPromise = Connection.connect(options);
+	it("should reject if password authentication fails", async () => {
+		const config = { host: "localhost", port: 6600, password: "wrongPassword" };
+		const connectPromise = Connection.connect(config);
 
-		mockSocketInstance?.simulateError(error);
+		expect(mocks.mockCreateConnection).toHaveBeenCalledTimes(1);
+		expect(lastCreatedSocket).toBeInstanceOf(SimpleMockSocket);
+		if (!lastCreatedSocket) throw new Error("Socket mock not created");
 
-		await expect(connectPromise).rejects.toThrow(error);
+		lastCreatedSocket.simulateData(`${OK} MPD 0.23.5\n`);
+		await Promise.resolve();
+
+		expect(lastCreatedSocket.write).toHaveBeenCalledTimes(1);
+
+		const errorMsg = "ACK [5@0] {password} incorrect password";
+		lastCreatedSocket.simulateData(`${errorMsg}\n`);
+
+		await Promise.resolve();
+		await expect(connectPromise).rejects.toThrow(errorMsg.trim());
+		expect(lastCreatedSocket.destroy).toHaveBeenCalled();
 	});
 
-	it("Connection.connect(): should reject if connection closes before handshake", async () => {
-		const connectPromise = Connection.connect(options);
+	it("should reject if connection times out before handshake", async () => {
+		vi.useFakeTimers();
+		const timeoutMs = 150;
+		const config = { host: "localhost", port: 6600, timeout: timeoutMs };
+		const connectPromise = Connection.connect(config);
 
-		mockSocketInstance?.simulateClose();
+		expect(mocks.mockCreateConnection).toHaveBeenCalledTimes(1);
+		expect(lastCreatedSocket).toBeInstanceOf(SimpleMockSocket);
+		if (!lastCreatedSocket) throw new Error("Socket mock not created");
+
+		vi.advanceTimersByTime(timeoutMs + 1);
+
+		await expect(connectPromise).rejects.toThrow(
+			`Connection timed out after ${timeoutMs}ms`,
+		);
+		expect(lastCreatedSocket.destroy).toHaveBeenCalledWith(expect.any(Error));
+	});
+
+	it("should clear timeout upon successful handshake", async () => {
+		vi.useFakeTimers();
+		const timeoutMs = 150;
+		const config = { host: "localhost", port: 6600, timeout: timeoutMs };
+		const connectPromise = Connection.connect(config);
+
+		expect(mocks.mockCreateConnection).toHaveBeenCalledTimes(1);
+		expect(lastCreatedSocket).toBeInstanceOf(SimpleMockSocket);
+		if (!lastCreatedSocket) throw new Error("Socket mock not created");
+
+		lastCreatedSocket.simulateData(`${OK} MPD 0.23.5\n`);
+		const connection = await connectPromise;
+
+		vi.advanceTimersByTime(timeoutMs + 1);
+
+		expect(connection).toBeInstanceOf(Connection);
+		expect(lastCreatedSocket.destroy).not.toHaveBeenCalled();
+	});
+
+	it("should reject if handshake response is invalid", async () => {
+		const config = { host: "localhost", port: 6600 };
+		const connectPromise = Connection.connect(config);
+
+		expect(mocks.mockCreateConnection).toHaveBeenCalledTimes(1);
+		expect(lastCreatedSocket).toBeInstanceOf(SimpleMockSocket);
+		if (!lastCreatedSocket) throw new Error("Socket mock not created");
+
+		const invalidResponse = "SOME UNEXPECTED RESPONSE\n";
+		lastCreatedSocket.simulateData(invalidResponse);
+
+		await expect(connectPromise).rejects.toThrow(
+			`Unexpected response from server: ${invalidResponse.trim()}`,
+		);
+		expect(lastCreatedSocket.destroy).toHaveBeenCalledWith(expect.any(Error));
+	});
+
+	it("should reject if socket emits error before handshake data", async () => {
+		const config = { host: "localhost", port: 6600 };
+		const connectPromise = Connection.connect(config);
+
+		expect(mocks.mockCreateConnection).toHaveBeenCalledTimes(1);
+		expect(lastCreatedSocket).toBeInstanceOf(SimpleMockSocket);
+		if (!lastCreatedSocket) throw new Error("Socket mock not created");
+
+		const testError = new Error("ECONNREFUSED");
+		lastCreatedSocket.simulateError(testError);
+
+		await expect(connectPromise).rejects.toThrow(testError);
+	});
+
+	it("should reject if socket closes before handshake data", async () => {
+		const config = { host: "localhost", port: 6600 };
+		const connectPromise = Connection.connect(config);
+
+		expect(mocks.mockCreateConnection).toHaveBeenCalledTimes(1);
+		expect(lastCreatedSocket).toBeInstanceOf(SimpleMockSocket);
+		if (!lastCreatedSocket) throw new Error("Socket mock not created");
+
+		lastCreatedSocket.emit("close");
 
 		await expect(connectPromise).rejects.toThrow(
 			"Connection closed before MPD welcome message.",
 		);
 	});
 
-	it("sendCommand(): should write command and return stream on OK", async () => {
-		const connectPromise = Connection.connect(options);
+	it("should disconnect correctly", async () => {
+		const connectPromise = Connection.connect({
+			host: "localhost",
+			port: 6600,
+		});
+		expect(lastCreatedSocket).toBeInstanceOf(SimpleMockSocket);
+		if (!lastCreatedSocket) throw new Error("Socket mock not created");
 
-		mockSocketInstance?.simulateData(`${OK} MPD 0.23.5\n`);
+		lastCreatedSocket.simulateData(`${OK} MPD 0.23.5\n`);
 		const connection = await connectPromise;
-		(mockSocketInstance?.write as jest.Mock)?.mockClear();
 
-		const cmd = "status";
-		const streamPromise = connection.executeCommand(cmd);
+		await connection.disconnect();
+		expect(lastCreatedSocket.end).toHaveBeenCalledTimes(1);
+	});
 
-		expect(mockSocketInstance?.write).toHaveBeenCalledWith(
-			`${cmd}\n`,
+	it("sendCommand(): should write command, return stream, and resolve on OK", async () => {
+		const connectPromise = Connection.connect({
+			host: "localhost",
+			port: 6600,
+		});
+		expect(lastCreatedSocket).toBeInstanceOf(SimpleMockSocket);
+		if (!lastCreatedSocket) throw new Error("Socket mock not created");
+
+		lastCreatedSocket.simulateData(`${OK} MPD 0.23.5\n`);
+		const connection = await connectPromise;
+
+		const command = "status";
+		const stream = connection.executeCommand(command);
+		const reader = stream.getReader();
+
+		expect(lastCreatedSocket.write).toHaveBeenCalledWith(
+			`${command}\n`,
 			"utf8",
 			expect.any(Function),
 		);
 
-		mockSocketInstance?.simulateData("volume: 80\n");
-		const stream = await streamPromise;
-		const reader = stream.getReader();
-		await expect(reader.read()).resolves.toEqual({
-			done: false,
-			value: { raw: "volume: 80" },
-		});
+		lastCreatedSocket.simulateData("state: play\n");
+		lastCreatedSocket.simulateData("song: 1\n");
+		lastCreatedSocket.simulateData(`${OK}\n`);
 
-		mockSocketInstance?.simulateData("state: play\n");
 		await expect(reader.read()).resolves.toEqual({
 			done: false,
 			value: { raw: "state: play" },
 		});
-
-		mockSocketInstance?.simulateData(`${OK}\n`);
+		await expect(reader.read()).resolves.toEqual({
+			done: false,
+			value: { raw: "song: 1" },
+		});
 		await expect(reader.read()).resolves.toEqual({
 			done: true,
 			value: undefined,
 		});
-
-		connection.disconnect();
 	});
 
-	it("sendCommand(): should reject on ACK", async () => {
-		const connectPromise = Connection.connect(options);
+	it("sendCommand(): should reject stream reading on ACK", async () => {
+		const connectPromise = Connection.connect({
+			host: "localhost",
+			port: 6600,
+		});
+		expect(lastCreatedSocket).toBeInstanceOf(SimpleMockSocket);
+		if (!lastCreatedSocket) throw new Error("Socket mock not created");
 
-		mockSocketInstance?.simulateData(`${OK} MPD 0.23.5\n`);
+		lastCreatedSocket.simulateData(`${OK} MPD 0.23.5\n`);
 		const connection = await connectPromise;
-		(mockSocketInstance?.write as jest.Mock)?.mockClear();
 
-		const cmd = "badcommand";
-		const errorMsg = `${ACK_PREFIX} [50@0] {${cmd}} unknown command "${cmd}"`;
-		const streamPromise = connection.executeCommand(cmd);
+		const command = "invalid_command";
+		const stream = connection.executeCommand(command);
+		const reader = stream.getReader();
 
-		expect(mockSocketInstance?.write).toHaveBeenCalledWith(
-			`${cmd}\n`,
+		expect(lastCreatedSocket.write).toHaveBeenCalledWith(
+			`${command}\n`,
 			"utf8",
 			expect.any(Function),
 		);
-		mockSocketInstance?.simulateData(`${errorMsg}\n`);
 
-		const stream = await streamPromise;
-		const reader = stream.getReader();
-		await expect(reader.read()).rejects.toThrow(MpdError);
+		const ackMsg = `${ACK_PREFIX} [5@0] {} unknown command "${command}"`;
+		lastCreatedSocket.simulateData(`${ackMsg}\n`);
 
-		connection.disconnect();
-	});
-
-	it("disconnect(): should call socket.end()", async () => {
-		const connectPromise = Connection.connect(options);
-		mockSocketInstance?.simulateData(`${OK} MPD 0.23.5\n`);
-		const connection = await connectPromise;
-
-		connection.disconnect();
-		expect(mockSocketInstance?.end).toHaveBeenCalledTimes(1);
-	});
-});
-
-describe("ConnectionPool", () => {
-	const poolOptions: Config & { poolSize: number } = {
-		host: "poolhost",
-		port: 6601,
-		poolSize: 2,
-	};
-
-	beforeEach(() => {
-		jest.clearAllMocks();
-		activeMockSockets = []; // Clear tracked sockets before each pool test
-	});
-
-	afterEach(() => {
-		jest.restoreAllMocks();
-	});
-
-	it("should create a pool instance", () => {
-		const pool = new ConnectionPool(poolOptions);
-		expect(pool).toBeInstanceOf(ConnectionPool);
-		// @ts-expect-error
-		expect(pool.config.host).toBe(poolOptions.host);
-		// @ts-expect-error
-		expect(pool.config.port).toBe(poolOptions.port);
-		// @ts-expect-error
-		expect(pool.config.poolSize).toBe(poolOptions.poolSize);
-	});
-
-	// Helper to simulate handshake for a specific connection/socket index
-	const simulateHandshake = async (socketIndex: number) => {
-		const socket = activeMockSockets[socketIndex];
-		if (socket) {
-			socket.simulateData(`${OK} MPD 0.23.5\n`);
-		} else {
-			throw new Error(`Mock socket at index ${socketIndex} not found`);
-		}
-	};
-
-	it("getConnection(): should return a real Connection instance (using mock socket)", async () => {
-		const pool = new ConnectionPool(poolOptions);
-		const connPromise = pool.getConnection();
-		await simulateHandshake(0);
-		const conn = await connPromise;
-
-		expect(conn).toBeInstanceOf(Connection);
-		expect(net.createConnection).toHaveBeenCalledTimes(1);
-		expect(conn.isBusy()).toBe(true);
-
-		await pool.releaseConnection(conn);
-	});
-
-	it("releaseConnection(): should mark connection as not busy", async () => {
-		const pool = new ConnectionPool(poolOptions);
-		const connPromise = pool.getConnection();
-		await simulateHandshake(0);
-		const conn = await connPromise;
-
-		expect(conn.isBusy()).toBe(true);
-
-		await pool.releaseConnection(conn);
-		expect(conn.isBusy()).toBe(false);
-	});
-
-	it("getConnection(): should reuse released connections", async () => {
-		const pool = new ConnectionPool(poolOptions);
-		const conn1Promise = pool.getConnection();
-		await simulateHandshake(0);
-		const conn1 = await conn1Promise;
-		await pool.releaseConnection(conn1);
-
-		const createConnectionCalls = (net.createConnection as jest.Mock).mock.calls
-			.length;
-
-		const conn2Promise = pool.getConnection();
-		expect(net.createConnection).toHaveBeenCalledTimes(createConnectionCalls);
-		const conn2 = await conn2Promise;
-		expect(conn2).toBe(conn1);
-		expect(conn2.isBusy()).toBe(true);
-
-		await pool.releaseConnection(conn2);
-	});
-
-	it("getConnection(): should create new connection if pool is not full", async () => {
-		const pool = new ConnectionPool(poolOptions);
-		const conn1Promise = pool.getConnection();
-		await simulateHandshake(0);
-		const conn1 = await conn1Promise;
-
-		const conn2Promise = pool.getConnection();
-		await simulateHandshake(1);
-		const conn2 = await conn2Promise;
-
-		expect(net.createConnection).toHaveBeenCalledTimes(2);
-		expect(conn1).not.toBe(conn2);
-		expect(conn1.isBusy()).toBe(true);
-		expect(conn2.isBusy()).toBe(true);
-
-		await pool.releaseConnection(conn1);
-		await pool.releaseConnection(conn2);
-	});
-
-	it("getConnection(): should throw error if pool is full and all connections are busy", async () => {
-		const pool = new ConnectionPool(poolOptions);
-		const conn1Promise = pool.getConnection();
-		const conn2Promise = pool.getConnection();
-		await simulateHandshake(0);
-		await simulateHandshake(1);
-		const conn1 = await conn1Promise;
-		const conn2 = await conn2Promise;
-
-		expect(conn1.isBusy()).toBe(true);
-		expect(conn2.isBusy()).toBe(true);
-
-		await expect(pool.getConnection()).rejects.toThrow(
-			"Failed to get connection: pool is full and all connections are busy.",
-		);
-	});
-
-	it("disconnectAll(): should disconnect all connections", async () => {
-		const pool = new ConnectionPool(poolOptions);
-		const conn1Promise = pool.getConnection();
-		const conn2Promise = pool.getConnection();
-		await simulateHandshake(0);
-		await simulateHandshake(1);
-		await conn1Promise;
-		await conn2Promise;
-
-		await pool.disconnectAll();
-
-		expect(activeMockSockets[0]?.end).toHaveBeenCalledTimes(1);
-		expect(activeMockSockets[1]?.end).toHaveBeenCalledTimes(1);
-		expect(pool.getAvailableCount()).toBe(poolOptions.poolSize);
+		await expect(reader.read()).rejects.toThrow(new MpdError(ackMsg));
 	});
 });

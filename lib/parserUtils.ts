@@ -4,9 +4,9 @@ import type {
 	TypedMpdObject,
 	ParsedRange,
 	ResponseLine,
-} from "./types";
+} from "./types.js";
 import debugCreator from "debug";
-import { PACKAGE_NAME } from "./const";
+import { PACKAGE_NAME } from "./const.js";
 
 const debug = debugCreator(`${PACKAGE_NAME}:parserUtils`);
 

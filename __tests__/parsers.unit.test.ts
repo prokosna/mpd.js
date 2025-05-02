@@ -1,4 +1,5 @@
-import { describe, it, expect } from "@jest/globals";
+import { describe, it } from "vitest";
+import { expect } from "vitest";
 import {
 	MpdParsers,
 	type ListParserOptions,
