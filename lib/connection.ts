@@ -2,20 +2,20 @@ import type { Socket } from "node:net";
 import { createConnection } from "node:net";
 import { ReadableStream } from "node:stream/web";
 import { StringDecoder } from "node:string_decoder";
-import type { Command } from "./command";
-import type { Config } from "./client";
-import { MpdError } from "./error";
+import type { Command } from "./command.js";
+import type { Config } from "./client.js";
+import { MpdError } from "./error.js";
 import {
 	ACK_PREFIX,
 	BINARY_HEADER_REGEX,
 	OK,
 	PACKAGE_NAME,
 	EVENT_CONNECTION_AVAILABLE,
-} from "./const";
+} from "./const.js";
 import debugCreator from "debug";
-import type { ResponseLine } from "./types";
+import type { ResponseLine } from "./types.js";
 import { EventEmitter } from "node:events";
-import { escapeArg } from "./parserUtils";
+import { escapeArg } from "./parserUtils.js";
 
 const debug = debugCreator(`${PACKAGE_NAME}:connection`);
 
@@ -43,7 +43,7 @@ export class Connection {
 	static connect(config: Config): Promise<Connection> {
 		return new Promise((resolve, reject) => {
 			const socket = createConnection(config);
-			let connectionEstablished = false;
+			let version = "";
 
 			const timer = setTimeout(() => {
 				socket.destroy(
@@ -51,20 +51,33 @@ export class Connection {
 				);
 			}, config.timeout || 5000);
 
-			socket.once("connect", () => {
-				// Connected, now wait for MPD welcome message
-			});
+			socket.once("connect", () => {});
 
 			socket.once("data", (data) => {
 				const message = data.toString("utf8");
 				if (message.startsWith("OK MPD ")) {
-					const version = message.substring("OK MPD ".length).trim();
+					version = message.substring("OK MPD ".length).trim();
 					clearTimeout(timer);
-					connectionEstablished = true;
+
 					if (config.password !== undefined) {
 						debug("Sending password...");
+						socket.once("data", (data2) => {
+							const message2 = data2.toString("utf8");
+							if (message2.startsWith(OK)) {
+								socket.removeAllListeners("error");
+								socket.removeAllListeners("close");
+								resolve(new Connection(socket, version));
+								return;
+							}
+							socket.destroy(
+								new Error(`Failed to authenticate with password: ${message2}`),
+							);
+						});
 						socket.write(`password ${escapeArg(config.password)}\n`, "utf8");
+						return;
 					}
+
+					// No password
 					socket.removeAllListeners("error");
 					socket.removeAllListeners("close");
 					resolve(new Connection(socket, version));

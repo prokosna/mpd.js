@@ -1,8 +1,8 @@
 import { EventEmitter } from "node:events";
-import type { Connection, ConnectionPool } from "./connection";
-import { ACK_PREFIX, CHANGED_EVENT_PREFIX, OK, PACKAGE_NAME } from "./const";
+import type { Connection, ConnectionPool } from "./connection.js";
+import { ACK_PREFIX, CHANGED_EVENT_PREFIX, OK, PACKAGE_NAME } from "./const.js";
 import debugCreator from "debug";
-import { MpdError } from "./error";
+import { MpdError } from "./error.js";
 
 const debug = debugCreator(`${PACKAGE_NAME}:event`);
 

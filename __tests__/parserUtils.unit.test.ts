@@ -1,3 +1,4 @@
+import { describe, expect, it } from "vitest";
 import { normalizeKey, parseLineToKeyValue, parsers } from "../lib/parserUtils";
 import type { ParsedTime, ParsedAudio, ParsedRange } from "../lib/types";
 

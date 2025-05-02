@@ -1,4 +1,5 @@
 import { MpdClient, MpdParsers, MpdError, Command } from "../lib";
+import { expect, describe, beforeAll, afterAll, it, vi } from "vitest";
 
 describe("MpdClient Integration Tests", () => {
 	let client: MpdClient;
@@ -172,47 +173,50 @@ describe("MpdClient Integration Tests", () => {
 	});
 
 	describe("Events", () => {
-		it("should emit system events by play", (done) => {
-			const handler = (name: string) => {
-				expect(typeof name).toBe("string");
-				client.off("system", handler);
-				done();
-			};
-			client.on("system", handler);
-			client.sendCommand(Command.cmd("play")).catch((err) => {
-				console.warn(
-					"Play command failed during event test, might be ok:",
-					err,
-				);
-			});
-		});
+		it("should emit system events by play", () =>
+			new Promise<void>((done) => {
+				const handler = (name: string) => {
+					expect(typeof name).toBe("string");
+					client.off("system", handler);
+					done();
+				};
+				client.on("system", handler);
+				client.sendCommand(Command.cmd("play")).catch((err) => {
+					console.warn(
+						"Play command failed during event test, might be ok:",
+						err,
+					);
+				});
+			}));
 
-		it("should emit system events by pause", (done) => {
-			const handler = (name: string) => {
-				expect(typeof name).toBe("string");
-				client.off("system", handler);
-				done();
-			};
-			client.on("system", handler);
-			client.sendCommand(Command.cmd("pause")).catch((err) => {
-				console.warn(
-					"Pause command failed during event test, might be ok:",
-					err,
-				);
-			});
-		});
+		it("should emit system events by pause", () =>
+			new Promise<void>((done) => {
+				const handler = (name: string) => {
+					expect(typeof name).toBe("string");
+					client.off("system", handler);
+					done();
+				};
+				client.on("system", handler);
+				client.sendCommand(Command.cmd("pause")).catch((err) => {
+					console.warn(
+						"Pause command failed during event test, might be ok:",
+						err,
+					);
+				});
+			}));
 
-		it("should emit close event", (done) => {
-			MpdClient.connect({
-				host: process.env.MPD_HOST || "localhost",
-				port: Number.parseInt(process.env.MPD_PORT || "6600", 10),
-			})
-				.then((newClient) => {
-					newClient.on("close", done);
-					newClient.disconnect();
+		it("should emit close event", () =>
+			new Promise<void>((done) => {
+				MpdClient.connect({
+					host: process.env.MPD_HOST || "localhost",
+					port: Number.parseInt(process.env.MPD_PORT || "6600", 10),
 				})
-				.catch(done);
-		});
+					.then((newClient) => {
+						newClient.on("close", done);
+						newClient.disconnect();
+					})
+					.catch(done);
+			}));
 	});
 
 	describe("Parsers", () => {

@@ -1,3 +1,4 @@
+import { describe, test, expect } from "vitest";
 import { MpdError, isError } from "../lib/error";
 
 describe("MPDError", () => {

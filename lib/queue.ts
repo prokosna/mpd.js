@@ -1,9 +1,9 @@
 import type { ReadableStream } from "node:stream/web";
-import type { Command } from "./command";
-import type { ConnectionPool, Connection } from "./connection";
-import { PACKAGE_NAME, EVENT_CONNECTION_AVAILABLE } from "./const";
+import type { Command } from "./command.js";
+import type { ConnectionPool, Connection } from "./connection.js";
+import { PACKAGE_NAME, EVENT_CONNECTION_AVAILABLE } from "./const.js";
 import debugCreator from "debug";
-import type { ResponseLine } from "./types";
+import type { ResponseLine } from "./types.js";
 
 const debug = debugCreator(`${PACKAGE_NAME}:queue`);
 

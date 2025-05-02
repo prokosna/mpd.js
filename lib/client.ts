@@ -1,13 +1,13 @@
 import { EventEmitter } from "node:events";
-import type { Command } from "./command";
-import { ConnectionPool } from "./connection";
-import { CommandQueue } from "./queue";
-import { EventManager } from "./event";
+import type { Command } from "./command.js";
+import { ConnectionPool } from "./connection.js";
+import { CommandQueue } from "./queue.js";
+import { EventManager } from "./event.js";
 import type { ReadableStream } from "node:stream/web";
-import type { ResponseLine } from "./types";
-import { OK, PACKAGE_NAME } from "./const";
+import type { ResponseLine } from "./types.js";
+import { OK, PACKAGE_NAME } from "./const.js";
 import debugCreator from "debug";
-import { MpdParsers } from "./parsers";
+import { MpdParsers } from "./parsers.js";
 import type * as net from "node:net";
 import os from "node:os";
 

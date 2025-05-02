@@ -4,9 +4,9 @@ import type {
 	TypedMpdObject,
 	ParsedRange,
 	ResponseLine,
-} from "./types";
+} from "./types.js";
 import debugCreator from "debug";
-import { PACKAGE_NAME } from "./const";
+import { PACKAGE_NAME } from "./const.js";
 
 const debug = debugCreator(`${PACKAGE_NAME}:parserUtils`);
 
@@ -369,7 +369,9 @@ export class LineToListTransformer extends LineTransformer {
 			this.currentItem = {};
 			addOrMerge(this.currentItem, this.normalizeKeys ? key : rawKey, value);
 		} else {
-			addOrMerge(this.currentItem, this.normalizeKeys ? key : rawKey, value);
+			if (this.currentItem !== undefined) {
+				addOrMerge(this.currentItem, this.normalizeKeys ? key : rawKey, value);
+			}
 		}
 	}
 

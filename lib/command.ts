@@ -1,4 +1,4 @@
-import { escapeArg } from "./parserUtils";
+import { escapeArg } from "./parserUtils.js";
 
 /**
  * Represents an MPD command with a name and arguments.
