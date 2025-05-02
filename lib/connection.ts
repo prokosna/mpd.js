@@ -16,6 +16,7 @@ import debugCreator from "debug";
 import type { ResponseLine } from "./types.js";
 import { EventEmitter } from "node:events";
 import { escapeArg } from "./parserUtils.js";
+import { randomUUID } from "node:crypto";
 
 const debug = debugCreator(`${PACKAGE_NAME}:connection`);
 
@@ -24,23 +25,29 @@ const debug = debugCreator(`${PACKAGE_NAME}:connection`);
  * Manages the socket connection, command execution, and response parsing.
  */
 export class Connection {
+	private readonly id: string;
 	readonly socket: Socket;
+	private readonly mpdVersion: string;
 	private busy: boolean;
-	private mpdVersion: string;
 
-	private constructor(socket: Socket, mpdVersion: string) {
+	private constructor(id: string, socket: Socket, mpdVersion: string) {
+		this.id = id;
 		this.socket = socket;
-		this.busy = false;
 		this.mpdVersion = mpdVersion;
+		this.busy = false;
 	}
 
 	/**
 	 * Establishes a connection to the MPD server.
 	 * Performs the initial handshake and optional password authentication.
 	 * @param config - Connection configuration options.
+	 * @param id - Optional ID for the connection. If not provided, a random UUID will be generated.
 	 * @returns A promise that resolves with a new Connection instance upon successful handshake.
 	 */
-	static connect(config: Config): Promise<Connection> {
+	static connect(
+		config: Config,
+		id: string = randomUUID(),
+	): Promise<Connection> {
 		return new Promise((resolve, reject) => {
 			const socket = createConnection(config);
 			let version = "";
@@ -66,7 +73,7 @@ export class Connection {
 							if (message2.startsWith(OK)) {
 								socket.removeAllListeners("error");
 								socket.removeAllListeners("close");
-								resolve(new Connection(socket, version));
+								resolve(new Connection(id, socket, version));
 								return;
 							}
 							socket.destroy(
@@ -80,7 +87,7 @@ export class Connection {
 					// No password
 					socket.removeAllListeners("error");
 					socket.removeAllListeners("close");
-					resolve(new Connection(socket, version));
+					resolve(new Connection(id, socket, version));
 				} else {
 					socket.destroy(
 						new Error(`Unexpected response from server: ${message}`),
@@ -335,6 +342,22 @@ export class Connection {
 	getMpdVersion(): string {
 		return this.mpdVersion;
 	}
+
+	/**
+	 * Gets the connection ID.
+	 * @returns The connection ID.
+	 */
+	getId(): string {
+		return this.id;
+	}
+
+	/**
+	 * Checks if the socket is destroyed.
+	 * @returns True if the socket is destroyed, false otherwise.
+	 */
+	isSocketDestroyed(): boolean {
+		return this.socket.destroyed;
+	}
 }
 
 /**
@@ -343,7 +366,8 @@ export class Connection {
  * Handles acquiring and releasing connections.
  */
 export class ConnectionPool extends EventEmitter {
-	private connections: Connection[];
+	private connectionPromises: Map<string, Promise<Connection>>;
+	private connections: Map<string, Connection>;
 	private config: Config;
 
 	/**
@@ -352,7 +376,8 @@ export class ConnectionPool extends EventEmitter {
 	 */
 	constructor(config: Config) {
 		super();
-		this.connections = [];
+		this.connections = new Map();
+		this.connectionPromises = new Map();
 		this.config = config;
 	}
 
@@ -362,34 +387,23 @@ export class ConnectionPool extends EventEmitter {
 	 * @param connection - The connection to release.
 	 */
 	releaseConnection(connection: Connection): void {
-		const index = this.connections.findIndex((c) => c === connection);
-
-		if (index >= 0) {
-			if (connection.isBusy()) {
-				debug(`Releasing connection: ${index}`);
-				connection.setBusy(false);
-				this.emit(EVENT_CONNECTION_AVAILABLE);
-			} else {
-				throw new Error(
-					`Attempted to release connection ${index} which was not busy.`,
-				);
+		for (const [key, c] of this.connections.entries()) {
+			if (c === connection) {
+				if (connection.isBusy()) {
+					debug(`Releasing connection: ${key}`);
+					connection.setBusy(false);
+					this.emit(EVENT_CONNECTION_AVAILABLE);
+				} else {
+					throw new Error(
+						`Attempted to release connection ${key} which was not busy.`,
+					);
+				}
+				return;
 			}
-		} else {
-			throw new Error(
-				`Attempted to release connection ${index} which is not managed by this pool.`,
-			);
 		}
-	}
-
-	/**
-	 * Gets the number of connections currently available (idle or ready to be created).
-	 * @returns The count of available connections.
-	 */
-	getAvailableCount(): number {
-		const total = this.connections.length;
-		const readyToCreateCount = this.config.poolSize - total;
-		const availableCount = this.connections.filter((c) => !c.isBusy()).length;
-		return readyToCreateCount + availableCount;
+		throw new Error(
+			`Attempted to release connection ${connection.getId()} which is not managed by this pool.`,
+		);
 	}
 
 	/**
@@ -397,23 +411,41 @@ export class ConnectionPool extends EventEmitter {
 	 * @returns A promise that resolves when all disconnections are attempted.
 	 */
 	async disconnectAll(): Promise<void> {
-		const disconnectPromises = this.connections.map((connection) =>
-			connection.disconnect().catch((error) => {
-				console.error(`Error disconnecting connection: ${error}`);
-			}),
+		const disconnectPromises = Array.from(this.connections.entries()).map(
+			([key, connection]) => {
+				this.connectionPromises.delete(key);
+				return connection.disconnect().catch((error) => {
+					console.error(`Error disconnecting connection: ${error}`);
+				});
+			},
 		);
-
+		for (const [key, connectionPromise] of this.connectionPromises) {
+			console.warn(
+				`Connection ${key} is still being created when disconnectAll was called.`,
+			);
+			disconnectPromises.push(
+				connectionPromise.then((connection) =>
+					connection.disconnect().catch((error) => {
+						console.error(`Error disconnecting connection: ${error}`);
+					}),
+				),
+			);
+		}
 		await Promise.allSettled(disconnectPromises);
-		this.connections = [];
+		this.connections = new Map();
+		this.connectionPromises = new Map();
 	}
 
 	/**
 	 * Creates a new, dedicated connection to the MPD server, outside of the pool management.
+	 * @param id - The ID for the connection.
 	 * @returns A promise that resolves with the new Connection instance.
 	 */
-	async createDedicatedConnection(): Promise<Connection> {
+	async createDedicatedConnection(
+		id: string = randomUUID(),
+	): Promise<Connection> {
 		try {
-			return Connection.connect(this.config);
+			return Connection.connect(this.config, id);
 		} catch (error) {
 			console.error("Failed to create dedicated connection:", error);
 			throw error;
@@ -428,42 +460,55 @@ export class ConnectionPool extends EventEmitter {
 	 * @returns A promise that resolves with an available Connection instance ready for use.
 	 */
 	async getConnection(): Promise<Connection> {
+		// 0. Check if there are any destroyed connections.
+		for (const [key, connection] of this.connections.entries()) {
+			if (connection.isSocketDestroyed()) {
+				this.connections.delete(key);
+				this.connectionPromises.delete(key);
+			}
+		}
+
 		// 1. Find an idle connection in the pool
-		for (const connection of this.connections) {
-			if (!connection.isBusy() && !connection.socket.destroyed) {
+		for (const connection of this.connections.values()) {
+			if (!connection.isBusy()) {
 				connection.setBusy(true);
 				return connection;
 			}
 		}
 
 		// 2. If no idle connection and pool is not full, create a new one
-		if (this.connections.length < this.config.poolSize) {
+		if (this.connectionPromises.size < this.config.poolSize) {
 			debug(
-				`No idle connection found, creating new one (pool size ${this.connections.length}/${this.config.poolSize}).`,
+				`No idle connection found, creating new one (pool size ${this.connectionPromises.size}/${this.config.poolSize}).`,
 			);
-			try {
-				const newConnection = await this.createDedicatedConnection();
-				this.connections.push(newConnection);
-				newConnection.setBusy(true);
-				// Add a listener to remove connection from pool if it closes unexpectedly
-				newConnection.socket.once("close", () => {
-					console.warn("Connection closed unexpectedly, removing from pool.");
-					this.connections = this.connections.filter(
-						(connection) => connection !== newConnection,
+			const id = randomUUID();
+			const newConnectionPromise = this.createDedicatedConnection(id);
+			this.connectionPromises.set(id, newConnectionPromise);
+			return newConnectionPromise
+				.then((newConnection) => {
+					this.connections.set(id, newConnection);
+					newConnection.setBusy(true);
+					// Add a listener to remove connection from pool if it closes unexpectedly
+					newConnection.socket.once("close", () => {
+						console.warn("Connection closed unexpectedly, removing from pool.");
+						this.connectionPromises.delete(id);
+						this.connections.delete(id);
+					});
+					debug(
+						`New connection created (pool size ${this.connections.size}/${this.config.poolSize}).`,
 					);
+					return newConnection;
+				})
+				.catch((err) => {
+					throw new Error(`Failed to create new connection: ${err}`);
 				});
-				debug(
-					`New connection created (pool size ${this.connections.length}/${this.config.poolSize}).`,
-				);
-				return newConnection;
-			} catch (error) {
-				throw new Error(`Failed to create new connection: ${error}`);
-			}
 		}
 
-		// 3. If pool is full and all connections are busy
-		throw new Error(
-			"Failed to get connection: pool is full and all connections are busy.",
-		);
+		// 3. If pool is full and all connections are busy, wait for a connection to become available
+		return new Promise((resolve) => {
+			this.once(EVENT_CONNECTION_AVAILABLE, () => {
+				resolve(this.getConnection());
+			});
+		});
 	}
 }
