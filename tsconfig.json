@@ -4,6 +4,7 @@
     "module": "ESNext",
     "declaration": true,
     "sourceMap": true,
+    "rootDir": "./lib",
     "outDir": "./dist",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
