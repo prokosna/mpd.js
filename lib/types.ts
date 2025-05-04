@@ -36,7 +36,7 @@ export interface ParsedAudio {
  * or field not present) and an index signature for any unknown fields.
  * c.f. https://mpd.readthedocs.io/en/latest/protocol.html
  */
-export interface TypedMpdObject {
+export interface MpdTypedObject {
 	// Base
 	directory?: string;
 	file?: string;
@@ -158,5 +158,5 @@ export interface TypedMpdObject {
 	[key: string]: unknown;
 
 	// For accumulation of multiple lines
-	children?: TypedMpdObject[];
+	children?: MpdTypedObject[];
 }

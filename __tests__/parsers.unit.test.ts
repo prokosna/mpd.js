@@ -1,7 +1,7 @@
 import { describe, it } from "vitest";
 import { expect } from "vitest";
 import {
-	MpdParsers,
+	Parsers,
 	type ListParserOptions,
 	type ObjectParsingOptions,
 } from "../lib/parsers";
@@ -65,7 +65,7 @@ describe("MpdParsers", () => {
 					controller.close();
 				},
 			});
-			const result = await MpdParsers.aggregateToString(stream);
+			const result = await Parsers.aggregateToString(stream);
 			expect(result).toBe("line1\nline2\nOK");
 		});
 
@@ -75,7 +75,7 @@ describe("MpdParsers", () => {
 					controller.close();
 				},
 			});
-			const result = await MpdParsers.aggregateToString(stream);
+			const result = await Parsers.aggregateToString(stream);
 			expect(result).toBe("");
 		});
 	});
@@ -93,7 +93,7 @@ describe("MpdParsers", () => {
 			];
 			const options: ListParserOptions = { delimiterKeys: ["file"] };
 			const result = await testStreamTransformerManual(
-				() => MpdParsers.transformToList(options),
+				() => Parsers.transformToList(options),
 				input,
 			);
 
@@ -116,7 +116,7 @@ describe("MpdParsers", () => {
 				normalizeKeys: true,
 			};
 			const result = await testStreamTransformerManual(
-				() => MpdParsers.transformToList(options),
+				() => Parsers.transformToList(options),
 				input,
 			);
 
@@ -130,7 +130,7 @@ describe("MpdParsers", () => {
 			const input = [rl("OK")];
 			const options: ListParserOptions = { delimiterKeys: ["file"] };
 			const result = await testStreamTransformerManual(
-				() => MpdParsers.transformToList(options),
+				() => Parsers.transformToList(options),
 				input,
 			);
 			expect(result).toEqual([]);
@@ -158,7 +158,7 @@ describe("MpdParsers", () => {
 				normalizeKeys: true,
 			};
 			const result = await testStreamTransformerManual(
-				() => MpdParsers.transformToListAndAccumulate(options),
+				() => Parsers.transformToListAndAccumulate(options),
 				input,
 			);
 
@@ -193,7 +193,7 @@ describe("MpdParsers", () => {
 				normalizeKeys: true,
 			};
 			const result = await testStreamTransformerManual(
-				() => MpdParsers.transformToListAndAccumulate(options),
+				() => Parsers.transformToListAndAccumulate(options),
 				input,
 			);
 
@@ -231,7 +231,7 @@ describe("MpdParsers", () => {
 				normalizeKeys: true,
 			};
 			const result = await testStreamTransformerManual(
-				() => MpdParsers.transformToListAndAccumulate(options),
+				() => Parsers.transformToListAndAccumulate(options),
 				input,
 			);
 
@@ -260,7 +260,7 @@ describe("MpdParsers", () => {
 				delimiterKeys: ["directory", "file"],
 			};
 			const result = await testStreamTransformerManual(
-				() => MpdParsers.transformToListAndAccumulate(options),
+				() => Parsers.transformToListAndAccumulate(options),
 				input,
 			);
 			expect(result).toEqual([]);
@@ -277,7 +277,7 @@ describe("MpdParsers", () => {
 			];
 			const options: ObjectParsingOptions = {};
 			const result = await testStreamTransformerManual(
-				() => MpdParsers.transformToObject(options),
+				() => Parsers.transformToObject(options),
 				input,
 			);
 
@@ -297,7 +297,7 @@ describe("MpdParsers", () => {
 			];
 			const options: ObjectParsingOptions = { normalizeKeys: true };
 			const result = await testStreamTransformerManual(
-				() => MpdParsers.transformToObject(options),
+				() => Parsers.transformToObject(options),
 				input,
 			);
 
@@ -312,7 +312,7 @@ describe("MpdParsers", () => {
 			const input = [rl("OK")];
 			const options: ObjectParsingOptions = {};
 			const result = await testStreamTransformerManual(
-				() => MpdParsers.transformToObject(options),
+				() => Parsers.transformToObject(options),
 				input,
 			);
 			expect(result.length).toBe(0);

@@ -1,5 +1,5 @@
 import type { Buffer } from "node:buffer";
-import type { ResponseLine, TypedMpdObject } from "./types.js";
+import type { ResponseLine, MpdTypedObject } from "./types.js";
 import { TransformStream } from "node:stream/web";
 import type { ReadableStream } from "node:stream/web";
 import {
@@ -63,7 +63,7 @@ export interface ListParserOptions extends ObjectParsingOptions {
  * }
  * ```
  */
-export namespace MpdParsers {
+export namespace Parsers {
 	/**
 	 * Creates a TransformStream that parses MPD response lines into distinct JavaScript objects.
 	 * It groups lines into objects based on the specified `delimiterKeys`.
@@ -233,7 +233,7 @@ export namespace MpdParsers {
 
 	/**
 	 * Creates a TransformStream that converts raw key-value objects (Record<string, unknown>)
-	 * into objects with typed values (TypedMpdObject).
+	 * into objects with typed values (MpdTypedObject).
 	 * It uses the `fieldParsers` mapping to convert string values based on normalized keys
 	 * (e.g., 'volume' string '50' becomes number 50).
 	 * Keys not found in `fieldParsers` retain their original string values.
@@ -252,11 +252,11 @@ export namespace MpdParsers {
 	 */
 	export function transformToTyped(): TransformStream<
 		Record<string, unknown>,
-		TypedMpdObject
+		MpdTypedObject
 	> {
-		return new TransformStream<Record<string, unknown>, TypedMpdObject>({
+		return new TransformStream<Record<string, unknown>, MpdTypedObject>({
 			transform(rawObject, controller) {
-				const typedObject: TypedMpdObject = {};
+				const typedObject: MpdTypedObject = {};
 				for (const [rawKey, rawValue] of Object.entries(rawObject)) {
 					const key = normalizeKey(rawKey);
 					if (key in fieldParsers) {

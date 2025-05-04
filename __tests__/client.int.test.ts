@@ -1,11 +1,11 @@
-import { MpdClient, MpdParsers, MpdError, Command } from "../lib";
-import { expect, describe, beforeAll, afterAll, it, vi } from "vitest";
+import { Client, Parsers, MpdError, Command } from "../lib";
+import { expect, describe, beforeAll, afterAll, it } from "vitest";
 
 describe("MpdClient Integration Tests", () => {
-	let client: MpdClient;
+	let client: Client;
 
 	beforeAll(async () => {
-		client = await MpdClient.connect({
+		client = await Client.connect({
 			host: process.env.MPD_HOST || "localhost",
 			port: Number.parseInt(process.env.MPD_PORT || "6600", 10),
 		});
@@ -17,10 +17,10 @@ describe("MpdClient Integration Tests", () => {
 				.streamCommand("listallinfo")
 				.then((stream) =>
 					stream.pipeThrough(
-						MpdParsers.transformToList({ delimiterKeys: "file" }),
+						Parsers.transformToList({ delimiterKeys: "file" }),
 					),
 				);
-			const songs = await MpdParsers.aggregateToList(listAllInfo);
+			const songs = await Parsers.aggregateToList(listAllInfo);
 
 			if (songs.length > 0) {
 				const addCommands = songs.map((song) =>
@@ -53,7 +53,7 @@ describe("MpdClient Integration Tests", () => {
 
 		it("should handle connection errors", async () => {
 			await expect(
-				MpdClient.connect({
+				Client.connect({
 					host: "invalid-host",
 					port: 6600,
 					timeout: 1000,
@@ -66,8 +66,8 @@ describe("MpdClient Integration Tests", () => {
 		it("should get status", async () => {
 			const result = await client
 				.streamCommand("status")
-				.then((stream) => stream.pipeThrough(MpdParsers.transformToObject()))
-				.then(MpdParsers.takeFirstObject);
+				.then((stream) => stream.pipeThrough(Parsers.transformToObject()))
+				.then(Parsers.takeFirstObject);
 			expect(result).toHaveProperty("volume");
 			expect(result).toHaveProperty("state");
 		});
@@ -75,8 +75,8 @@ describe("MpdClient Integration Tests", () => {
 		it("should get statistics", async () => {
 			const result = await client
 				.streamCommand("stats")
-				.then((stream) => stream.pipeThrough(MpdParsers.transformToObject()))
-				.then(MpdParsers.takeFirstObject);
+				.then((stream) => stream.pipeThrough(Parsers.transformToObject()))
+				.then(Parsers.takeFirstObject);
 			expect(result).toHaveProperty("artists");
 			expect(result).toHaveProperty("albums");
 			expect(result).toHaveProperty("songs");
@@ -91,10 +91,10 @@ describe("MpdClient Integration Tests", () => {
 				.streamCommand("status")
 				.then((stream) =>
 					stream
-						.pipeThrough(MpdParsers.transformToObject())
-						.pipeThrough(MpdParsers.transformToTyped()),
+						.pipeThrough(Parsers.transformToObject())
+						.pipeThrough(Parsers.transformToTyped()),
 				)
-				.then(MpdParsers.takeFirstObject);
+				.then(Parsers.takeFirstObject);
 			expect(status?.volume).toBe(50);
 		});
 
@@ -105,26 +105,26 @@ describe("MpdClient Integration Tests", () => {
 				.streamCommand("status")
 				.then((stream) =>
 					stream
-						.pipeThrough(MpdParsers.transformToObject())
-						.pipeThrough(MpdParsers.transformToTyped()),
+						.pipeThrough(Parsers.transformToObject())
+						.pipeThrough(Parsers.transformToTyped()),
 				)
-				.then(MpdParsers.takeFirstObject);
+				.then(Parsers.takeFirstObject);
 			expect(status?.volume).toBe(60);
 		});
 
 		it("should send multiple commands using streamCommands", async () => {
 			const commands = ["status", Command.cmd("setvol", [60])];
 			await expect(
-				client.streamCommands(commands).then(MpdParsers.aggregateToString),
+				client.streamCommands(commands).then(Parsers.aggregateToString),
 			).resolves.toBeDefined();
 			const status = await client
 				.streamCommand("status")
 				.then((stream) =>
 					stream
-						.pipeThrough(MpdParsers.transformToObject())
-						.pipeThrough(MpdParsers.transformToTyped()),
+						.pipeThrough(Parsers.transformToObject())
+						.pipeThrough(Parsers.transformToTyped()),
 				)
-				.then(MpdParsers.takeFirstObject);
+				.then(Parsers.takeFirstObject);
 			expect(status?.volume).toBe(60);
 		});
 
@@ -132,30 +132,30 @@ describe("MpdClient Integration Tests", () => {
 			await client.sendCommand("stop");
 			let status = await client
 				.streamCommand("status")
-				.then((stream) => stream.pipeThrough(MpdParsers.transformToObject()))
-				.then(MpdParsers.takeFirstObject);
+				.then((stream) => stream.pipeThrough(Parsers.transformToObject()))
+				.then(Parsers.takeFirstObject);
 			expect(status?.state).toBe("stop");
 
 			await client.sendCommand("play");
 			status = await client
 				.streamCommand("status")
-				.then((stream) => stream.pipeThrough(MpdParsers.transformToObject()))
-				.then(MpdParsers.takeFirstObject);
+				.then((stream) => stream.pipeThrough(Parsers.transformToObject()))
+				.then(Parsers.takeFirstObject);
 			expect(status?.state).toBeDefined();
 
 			if (status?.state === "play") {
 				await client.sendCommand(Command.cmd("pause", [1]));
 				status = await client
 					.streamCommand("status")
-					.then((stream) => stream.pipeThrough(MpdParsers.transformToObject()))
-					.then(MpdParsers.takeFirstObject);
+					.then((stream) => stream.pipeThrough(Parsers.transformToObject()))
+					.then(Parsers.takeFirstObject);
 				expect(status?.state).toBe("pause");
 
 				await client.sendCommand(Command.cmd("pause", [0]));
 				status = await client
 					.streamCommand("status")
-					.then((stream) => stream.pipeThrough(MpdParsers.transformToObject()))
-					.then(MpdParsers.takeFirstObject);
+					.then((stream) => stream.pipeThrough(Parsers.transformToObject()))
+					.then(Parsers.takeFirstObject);
 				expect(status?.state).toBe("play");
 			}
 		});
@@ -207,7 +207,7 @@ describe("MpdClient Integration Tests", () => {
 
 		it("should emit close event", () =>
 			new Promise<void>((done) => {
-				MpdClient.connect({
+				Client.connect({
 					host: process.env.MPD_HOST || "localhost",
 					port: Number.parseInt(process.env.MPD_PORT || "6600", 10),
 				})
@@ -225,10 +225,10 @@ describe("MpdClient Integration Tests", () => {
 				.streamCommand("status")
 				.then((stream) =>
 					stream
-						.pipeThrough(MpdParsers.transformToObject())
-						.pipeThrough(MpdParsers.transformToTyped()),
+						.pipeThrough(Parsers.transformToObject())
+						.pipeThrough(Parsers.transformToTyped()),
 				)
-				.then(MpdParsers.takeFirstObject);
+				.then(Parsers.takeFirstObject);
 			expect(typeof status?.volume).toBe("number");
 			expect(typeof status?.repeat).toBe("boolean");
 			expect(["play", "stop", "pause"]).toContain(status?.state);
@@ -239,10 +239,10 @@ describe("MpdClient Integration Tests", () => {
 				.streamCommand("listallinfo")
 				.then((stream) =>
 					stream.pipeThrough(
-						MpdParsers.transformToList({ delimiterKeys: "file" }),
+						Parsers.transformToList({ delimiterKeys: "file" }),
 					),
 				)
-				.then(MpdParsers.aggregateToList);
+				.then(Parsers.aggregateToList);
 			expect(Array.isArray(listAll)).toBe(true);
 			if (listAll.length > 0) {
 				expect(listAll[0]).toHaveProperty("file");
@@ -252,8 +252,8 @@ describe("MpdClient Integration Tests", () => {
 		it("should parse status information with audio format", async () => {
 			const status = await client
 				.streamCommand("status")
-				.then((stream) => stream.pipeThrough(MpdParsers.transformToObject()))
-				.then(MpdParsers.takeFirstObject);
+				.then((stream) => stream.pipeThrough(Parsers.transformToObject()))
+				.then(Parsers.takeFirstObject);
 
 			expect(status).toBeDefined();
 			if (!status) return;
@@ -289,10 +289,10 @@ describe("MpdClient Integration Tests", () => {
 				.streamCommand(Command.cmd("search", ["any", "test"]))
 				.then((stream) =>
 					stream.pipeThrough(
-						MpdParsers.transformToList({ delimiterKeys: "file" }),
+						Parsers.transformToList({ delimiterKeys: "file" }),
 					),
 				)
-				.then(MpdParsers.aggregateToList);
+				.then(Parsers.aggregateToList);
 			expect(Array.isArray(result)).toBe(true);
 
 			if (result.length > 0) {
