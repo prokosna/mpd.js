@@ -17,11 +17,11 @@ npm i prokosna/mpd.js
 ## Basic Usage
 
 ```typescript
-import { MpdClient, MpdParsers } from "mpd3";
+import { Client, Parsers } from "mpd3";
 
 async function main() {
   // Connect to MPD server (defaults to localhost:6600)
-  const client = await MpdClient.connect({
+  const client = await Client.connect({
     host: "localhost",
     port: 6600,
   });
@@ -41,40 +41,40 @@ async function main() {
     const playlistInfoStream = await client.streamCommands(["playlistinfo"]);
     // Transform the stream into a list of objects
     const playlistInfoListStream = playlistInfoStream.pipeThrough(
-      MpdParsers.transformToList({ delimiterKeys: "file" })
+      Parsers.transformToList({ delimiterKeys: "file" })
     );
     // Transform the list of objects into a typed list
     const playlistInfoTypedListStream = playlistInfoListStream.pipeThrough(
-      MpdParsers.transformToTyped()
+      Parsers.transformToTyped()
     );
     // Aggregate the list into an array
-    const playlistInfo = await MpdParsers.aggregateToList(
+    const playlistInfo = await Parsers.aggregateToList(
       playlistInfoTypedListStream
     );
     console.log("Playlist Info (Count):", playlistInfo.length); // Result is an array of track objects
     console.log();
 
-    // Other transforms are available in MpdParsers
+    // Other transforms are available in Parsers
     const listAllInfo = await client
       .streamCommand("listallinfo")
       .then((stream) =>
         stream
           .pipeThrough(
-            MpdParsers.transformToListAndAccumulate({
+            Parsers.transformToListAndAccumulate({
               delimiterKeys: ["directory", "file"],
             })
           )
-          .pipeThrough(MpdParsers.transformToTyped())
+          .pipeThrough(Parsers.transformToTyped())
       )
-      .then(MpdParsers.aggregateToList);
+      .then(Parsers.aggregateToList);
     console.log("List All Info (Count):", listAllInfo.length); // Result is an array of track objects
     console.log();
 
     // Get object from stream
     const stats = await client
       .streamCommand("stats")
-      .then((stream) => stream.pipeThrough(MpdParsers.transformToObject()))
-      .then(MpdParsers.takeFirstObject);
+      .then((stream) => stream.pipeThrough(Parsers.transformToObject()))
+      .then(Parsers.takeFirstObject);
     console.log("Stats:", stats);
     console.log();
 
@@ -114,11 +114,11 @@ main().catch((err) => {
 
 ## API
 
-### `MpdClient.connect(config?: Config): Promise<MpdClient>`
+### `Client.connect(config?: Config): Promise<Client>`
 
 _Static Method_
 
-Establishes connection(s) to the MPD server and returns a connected `MpdClient` instance. This is the primary way to create a client.
+Establishes connection(s) to the MPD server and returns a connected `Client` instance. This is the primary way to create a client.
 
 **Options (`Config` type, extends `net.NetConnectOpts`):**
 
@@ -170,9 +170,9 @@ Closes all connections to the MPD server, stops event monitoring, and cleans up 
 
 Returns the MPD protocol version reported by the server during the initial connection.
 
-### `MpdParsers`
+### `Parsers`
 
-There are several parsers available in the `MpdParsers` namespace:
+There are several parsers available in the `Parsers` namespace:
 
 - `transformToList`
 - `transformToListAndAccumulate`
@@ -188,7 +188,7 @@ These utility functions are used by `pipeThrough()` or `then()` of Promise<Reada
 
 ## Events
 
-The `MpdClient` instance extends `EventEmitter`.
+The `Client` instance extends `EventEmitter`.
 
 - **`system`** (subsystem: string): Emitted when MPD reports a change in one of its subsystems (e.g., `player`, `mixer`, `options`, `playlist`).
 - **`error`** (error: Error): Emitted when a connection or protocol error occurs within the connection pool or event monitoring.

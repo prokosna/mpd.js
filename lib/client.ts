@@ -7,7 +7,7 @@ import type { ReadableStream } from "node:stream/web";
 import type { ResponseLine } from "./types.js";
 import { OK, PACKAGE_NAME } from "./const.js";
 import debugCreator from "debug";
-import { MpdParsers } from "./parsers.js";
+import { Parsers } from "./parsers.js";
 import type * as net from "node:net";
 import os from "node:os";
 
@@ -56,7 +56,7 @@ function applyDefaultValuesIfNotSet(config: Config): Config {
  * Manages connections, command queuing, and event handling.
  * Emits events based on MPD system updates (e.g., 'system-player').
  */
-export class MpdClient extends EventEmitter {
+export class Client extends EventEmitter {
 	private connectionPool: ConnectionPool;
 	private commandExecutor: CommandExecutor;
 	private eventManager: EventManager;
@@ -80,9 +80,9 @@ export class MpdClient extends EventEmitter {
 	 * @returns A promise that resolves with the connected MpdClient instance.
 	 * @throws {Error} If the connection or initial setup fails.
 	 */
-	static async connect(config: Config): Promise<MpdClient> {
+	static async connect(config: Config): Promise<Client> {
 		debug("Connecting...");
-		const client = new MpdClient(applyDefaultValuesIfNotSet(config));
+		const client = new Client(applyDefaultValuesIfNotSet(config));
 		debug("Client instance created.");
 
 		try {
@@ -107,7 +107,7 @@ export class MpdClient extends EventEmitter {
 		debug("Sending command: %o", command);
 		return this.commandExecutor
 			.execute(command)
-			.then(MpdParsers.aggregateToString)
+			.then(Parsers.aggregateToString)
 			.then((str) => [str, OK].filter(Boolean).join("\n"));
 	}
 
@@ -120,7 +120,7 @@ export class MpdClient extends EventEmitter {
 		debug("Sending commands: %o", commandList);
 		return this.commandExecutor
 			.execute(commandList)
-			.then(MpdParsers.aggregateToString)
+			.then(Parsers.aggregateToString)
 			.then((str) => [str, OK].filter(Boolean).join("\n"));
 	}
 
