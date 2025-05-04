@@ -73,7 +73,10 @@ export class Client extends EventEmitter {
 		this.commandExecutor = new CommandExecutor(this.connectionPool);
 		this.eventManager = new EventManager(this, this.connectionPool);
 
-		this.on("newListener", async () => {
+		this.on("newListener", async (event: string) => {
+			if (!event.includes("system")) {
+				return;
+			}
 			this.totalListeners++;
 			if (this.totalListeners === 1) {
 				await this.eventManager.startMonitoring();
