@@ -61,6 +61,7 @@ export class Client extends EventEmitter {
 	private commandExecutor: CommandExecutor;
 	private eventManager: EventManager;
 	private mpdVersion = "unknown";
+	private totalListeners = 0;
 
 	/**
 	 * Private constructor. Use MpdClient.connect() to create instances.
@@ -71,11 +72,19 @@ export class Client extends EventEmitter {
 		this.connectionPool = new ConnectionPool(config);
 		this.commandExecutor = new CommandExecutor(this.connectionPool);
 		this.eventManager = new EventManager(this, this.connectionPool);
+
+		this.on("newListener", async () => {
+			this.totalListeners++;
+			if (this.totalListeners === 1) {
+				await this.eventManager.startMonitoring();
+				debug("Event monitoring started.");
+			}
+		});
 	}
 
 	/**
 	 * Creates and connects an MpdClient instance.
-	 * Initializes connection pool, command queue, and event monitoring.
+	 * Initializes connection pool and command queue.
 	 * @param config - The client configuration.
 	 * @returns A promise that resolves with the connected MpdClient instance.
 	 * @throws {Error} If the connection or initial setup fails.
@@ -86,10 +95,14 @@ export class Client extends EventEmitter {
 		debug("Client instance created.");
 
 		try {
-			const mpdVersion = await client.eventManager.startMonitoring();
-			client.mpdVersion = mpdVersion;
-			debug("Event monitoring started. MPD version: %s", mpdVersion);
-			debug("Connection successful.");
+			const connection =
+				await client.connectionPool.createDedicatedConnection();
+			client.mpdVersion = connection.getMpdVersion();
+			debug(
+				"Successfully connected to MPD server, version: %s",
+				client.mpdVersion,
+			);
+			await connection.disconnect();
 			return client;
 		} catch (error) {
 			debug("Connection error:", error);
