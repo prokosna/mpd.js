@@ -392,8 +392,11 @@ export class ConnectionPool extends EventEmitter {
 	private connectionPromises: Map<string, Promise<Connection>>;
 	private connections: Map<string, Connection>;
 	private config: Config;
-	// biome-ignore lint/suspicious/noExplicitAny: The type of the reject function can be any.
-	private waitingResolvers: [((value: Connection | PromiseLike<Connection>) => void), ((reason?: any) => void)][];
+	private waitingResolvers: [
+		(value: Connection | PromiseLike<Connection>) => void,
+		// biome-ignore lint/suspicious/noExplicitAny: The type of the reject function can be any.
+		(reason?: any) => void,
+	][];
 
 	/**
 	 * Creates a new ConnectionPool.
