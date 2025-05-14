@@ -392,6 +392,8 @@ export class ConnectionPool extends EventEmitter {
 	private connectionPromises: Map<string, Promise<Connection>>;
 	private connections: Map<string, Connection>;
 	private config: Config;
+	// biome-ignore lint/suspicious/noExplicitAny: The type of the reject function can be any.
+	private waitingResolvers: [((value: Connection | PromiseLike<Connection>) => void), ((reason?: any) => void)][];
 
 	/**
 	 * Creates a new ConnectionPool.
@@ -402,6 +404,15 @@ export class ConnectionPool extends EventEmitter {
 		this.connections = new Map();
 		this.connectionPromises = new Map();
 		this.config = config;
+		this.waitingResolvers = [];
+
+		this.on(EVENT_CONNECTION_AVAILABLE, () => {
+			if (this.waitingResolvers.length === 0) {
+				return;
+			}
+			const [resolve, reject] = this.waitingResolvers.shift();
+			this.getConnection().then(resolve).catch(reject);
+		});
 	}
 
 	/**
@@ -435,6 +446,11 @@ export class ConnectionPool extends EventEmitter {
 	 * @returns A promise that resolves when all disconnections are attempted.
 	 */
 	async disconnectAll(): Promise<void> {
+		for (const [_, reject] of this.waitingResolvers) {
+			reject(new Error("Connection pool was closed."));
+		}
+		this.waitingResolvers = [];
+
 		const disconnectPromises = Array.from(this.connections.entries()).map(
 			([key, connection]) => {
 				this.connectionPromises.delete(key);
@@ -529,10 +545,8 @@ export class ConnectionPool extends EventEmitter {
 		}
 
 		// 3. If pool is full and all connections are busy, wait for a connection to become available
-		return new Promise((resolve) => {
-			this.once(EVENT_CONNECTION_AVAILABLE, () => {
-				resolve(this.getConnection());
-			});
+		return new Promise((resolve, reject) => {
+			this.waitingResolvers.push([resolve, reject]);
 		});
 	}
 }
