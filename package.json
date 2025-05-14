@@ -1,6 +1,6 @@
 {
   "name": "mpd3",
-  "version": "0.2.0",
+  "version": "0.1.2",
   "description": "Low level MPD (Music Player Daemon) client with Web Streams API",
   "main": "./dist/cjs/index.js",
   "type": "module",
