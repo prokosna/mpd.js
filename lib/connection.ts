@@ -543,6 +543,10 @@ export class ConnectionPool extends EventEmitter {
 					return newConnection;
 				})
 				.catch((err) => {
+					this.connectionPromises.delete(id);
+					debug(
+						`Failed to create connection ${id}, removed from pool. Pool size now: ${this.connectionPromises.size}/${this.config.poolSize}`,
+					);
 					throw new Error(`Failed to create new connection: ${err}`);
 				});
 		}

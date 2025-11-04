@@ -1,7 +1,5 @@
 # MPD Client for Node.js
 
-**This repository is still WIP**
-
 [![Build Status](https://github.com/prokosna/mpd.js/actions/workflows/test.yml/badge.svg)](https://github.com/prokosna/mpd.js/actions/workflows/test.yml)
 
 Connect to a [Music Player Daemon](https://musicpd.org) (MPD) server, send commands, and receive events.
