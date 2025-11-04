@@ -57,6 +57,7 @@ describe("MpdClient Integration Tests", () => {
 					host: "invalid-host",
 					port: 6600,
 					timeout: 1000,
+					maxRetries: 0,
 				}),
 			).rejects.toThrow();
 		}, 5000);
@@ -217,6 +218,18 @@ describe("MpdClient Integration Tests", () => {
 					})
 					.catch(done);
 			}));
+
+		it("should handle connection with retry on failure", async () => {
+			await expect(
+				Client.connect({
+					host: "invalid-host-that-does-not-exist",
+					port: 6600,
+					timeout: 500,
+					maxRetries: 1,
+					reconnectDelay: 100,
+				}),
+			).rejects.toThrow();
+		}, 10000);
 	});
 
 	describe("Parsers", () => {

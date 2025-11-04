@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { Connection, ConnectionPool } from "./connection.js";
+import type { Config } from "./client.js";
 import { ACK_PREFIX, CHANGED_EVENT_PREFIX, OK, PACKAGE_NAME } from "./const.js";
 import debugCreator from "debug";
 import { MpdError } from "./error.js";
@@ -16,19 +17,29 @@ export class EventManager extends EventEmitter {
 	private idling: boolean;
 	private emitter: EventEmitter;
 	private connectionPool: ConnectionPool;
+	private config: Config;
 	private isMonitoring = false;
+	private reconnectAttempts = 0;
+	private reconnectTimer?: NodeJS.Timeout;
+	private isReconnecting = false;
 
 	/**
 	 * Creates an instance of EventManager.
 	 * @param emitter - The main EventEmitter of the MpdClient instance.
 	 * @param connectionPool - The connection pool to acquire a dedicated connection from.
+	 * @param config - Client configuration including reconnect settings.
 	 */
-	constructor(emitter: EventEmitter, connectionPool: ConnectionPool) {
+	constructor(
+		emitter: EventEmitter,
+		connectionPool: ConnectionPool,
+		config: Config,
+	) {
 		super();
 		this.connection = undefined;
 		this.idling = false;
 		this.emitter = emitter;
 		this.connectionPool = connectionPool;
+		this.config = config;
 	}
 
 	/**
@@ -46,31 +57,7 @@ export class EventManager extends EventEmitter {
 		debug("Starting event monitoring...");
 		try {
 			this.connection = await this.connectionPool.createDedicatedConnection();
-
-			this.connection.socket.on("data", (data: Buffer) => {
-				this.handleEventData(data.toString("utf8"));
-			});
-
-			this.connection.socket.on("close", (hadError: boolean) => {
-				debug(`Event connection closed${hadError ? " with error" : ""}.`);
-				this.emitter.emit(
-					"close",
-					hadError
-						? new Error("Event connection closed due to error")
-						: undefined,
-				);
-				// Clean up.
-				this.connection?.socket?.removeAllListeners();
-				this.connection = undefined;
-				this.idling = false;
-				this.isMonitoring = false;
-			});
-
-			this.connection.socket.on("error", (err: Error) => {
-				debug("Event connection error:", err);
-				this.emitter.emit("error", err);
-			});
-
+			this.setupConnectionListeners();
 			this.startIdling();
 			this.isMonitoring = true;
 
@@ -98,13 +85,25 @@ export class EventManager extends EventEmitter {
 	 * @returns A promise that resolves when the connection is cleanly disconnected, or rejects on error.
 	 */
 	async stopMonitoring(): Promise<void> {
-		if (this.connection === undefined) {
+		if (this.connection === undefined && !this.isReconnecting) {
 			debug("Event monitoring is not active.");
 			return;
 		}
 
 		debug("Stopping event monitoring...");
 		this.isMonitoring = false;
+		this.isReconnecting = false;
+		this.reconnectAttempts = 0;
+
+		if (this.reconnectTimer) {
+			clearTimeout(this.reconnectTimer);
+			this.reconnectTimer = undefined;
+		}
+
+		if (!this.connection) {
+			return;
+		}
+
 		this.stopIdling();
 
 		try {
@@ -236,5 +235,78 @@ export class EventManager extends EventEmitter {
 				debug("Received unexpected line on event connection:", line);
 			}
 		}
+	}
+
+	private setupConnectionListeners(): void {
+		if (!this.connection) {
+			return;
+		}
+
+		this.connection.socket.on("data", (data: Buffer) => {
+			this.handleEventData(data.toString("utf8"));
+		});
+
+		this.connection.socket.on("close", (hadError: boolean) => {
+			debug(`Event connection closed${hadError ? " with error" : ""}.`);
+			this.connection?.socket?.removeAllListeners();
+			this.connection = undefined;
+			this.idling = false;
+
+			if (this.isMonitoring && !this.isReconnecting) {
+				this.attemptReconnect();
+			} else if (!this.isMonitoring) {
+				this.emitter.emit(
+					"close",
+					hadError
+						? new Error("Event connection closed due to error")
+						: undefined,
+				);
+			}
+		});
+
+		this.connection.socket.on("error", (err: Error) => {
+			debug("Event connection error:", err);
+			this.emitter.emit("error", err);
+		});
+	}
+
+	private attemptReconnect(): void {
+		if (this.isReconnecting || !this.isMonitoring) {
+			return;
+		}
+
+		if (this.reconnectAttempts >= (this.config.maxRetries ?? 3)) {
+			debug("Max reconnection attempts reached.");
+			this.isMonitoring = false;
+			this.reconnectAttempts = 0;
+			this.emitter.emit(
+				"close",
+				new Error("Event connection closed after max reconnection attempts"),
+			);
+			return;
+		}
+
+		this.isReconnecting = true;
+		this.reconnectAttempts++;
+
+		const delay = this.config.reconnectDelay ?? 5000;
+		debug(
+			`Attempting reconnection ${this.reconnectAttempts}/${this.config.maxRetries ?? 3} in ${delay}ms...`,
+		);
+
+		this.reconnectTimer = setTimeout(async () => {
+			try {
+				this.connection = await this.connectionPool.createDedicatedConnection();
+				this.setupConnectionListeners();
+				this.startIdling();
+				this.reconnectAttempts = 0;
+				this.isReconnecting = false;
+				debug("Successfully reconnected event connection.");
+			} catch (error) {
+				debug(`Reconnection attempt ${this.reconnectAttempts} failed:`, error);
+				this.isReconnecting = false;
+				this.attemptReconnect();
+			}
+		}, delay);
 	}
 }

@@ -71,7 +71,7 @@ export class Client extends EventEmitter {
 		super();
 		this.connectionPool = new ConnectionPool(config);
 		this.commandExecutor = new CommandExecutor(this.connectionPool);
-		this.eventManager = new EventManager(this, this.connectionPool);
+		this.eventManager = new EventManager(this, this.connectionPool, config);
 
 		this.on("newListener", async (event: string) => {
 			if (!event.includes("system")) {
@@ -90,28 +90,51 @@ export class Client extends EventEmitter {
 	 * Initializes connection pool and command queue.
 	 * @param config - The client configuration.
 	 * @returns A promise that resolves with the connected MpdClient instance.
-	 * @throws {Error} If the connection or initial setup fails.
+	 * @throws {Error} If the connection or initial setup fails after all retry attempts.
 	 */
 	static async connect(config: Config): Promise<Client> {
 		debug("Connecting...");
-		const client = new Client(applyDefaultValuesIfNotSet(config));
+		const appliedConfig = applyDefaultValuesIfNotSet(config);
+		const client = new Client(appliedConfig);
 		debug("Client instance created.");
 
-		try {
-			const connection =
-				await client.connectionPool.createDedicatedConnection();
-			client.mpdVersion = connection.getMpdVersion();
-			debug(
-				"Successfully connected to MPD server, version: %s",
-				client.mpdVersion,
-			);
-			await connection.disconnect();
-			return client;
-		} catch (error) {
-			debug("Connection error:", error);
-			await client.disconnect();
-			throw error;
+		const maxRetries = appliedConfig.maxRetries ?? 3;
+		const reconnectDelay = appliedConfig.reconnectDelay ?? 5000;
+		let lastError: Error | undefined;
+
+		for (let attempt = 0; attempt <= maxRetries; attempt++) {
+			try {
+				const connection =
+					await client.connectionPool.createDedicatedConnection();
+				client.mpdVersion = connection.getMpdVersion();
+				debug(
+					"Successfully connected to MPD server, version: %s",
+					client.mpdVersion,
+				);
+				await connection.disconnect();
+				return client;
+			} catch (error) {
+				lastError = error as Error;
+				debug(
+					`Connection attempt ${attempt + 1}/${maxRetries + 1} failed:`,
+					error,
+				);
+
+				if (attempt < maxRetries) {
+					debug(`Retrying in ${reconnectDelay}ms...`);
+					await new Promise((resolve) => setTimeout(resolve, reconnectDelay));
+				}
+			}
 		}
+
+		debug("All connection attempts failed.");
+		await client.disconnect();
+		throw (
+			lastError ||
+			new Error(
+				`Failed to connect to MPD server after ${maxRetries + 1} attempts`,
+			)
+		);
 	}
 
 	/**
