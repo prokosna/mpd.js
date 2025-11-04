@@ -125,8 +125,15 @@ Establishes connection(s) to the MPD server and returns a connected `Client` ins
 - `password` (string): Optional MPD password.
 - `timeout` (number): Connection timeout in milliseconds (default: `5000`).
 - `poolSize` (number): Maximum number of connections in the pool (default: `3`).
-- `reconnectDelay` (number): Time in milliseconds before attempting to reconnect (default: `5000`).
-- `maxRetries` (number): Maximum number of reconnection attempts (default: `3`).
+- `reconnectDelay` (number): Delay in milliseconds between reconnection attempts (default: `5000`).
+- `maxRetries` (number): Maximum number of reconnection attempts. Used for both initial connection and event monitoring reconnection (default: `3`).
+
+**Reconnection Behavior:**
+
+The client implements automatic reconnection in two scenarios:
+
+1. **Initial Connection**: If `Client.connect()` fails, it will retry up to `maxRetries` times with `reconnectDelay` between each attempt.
+2. **Event Monitoring**: If the event monitoring connection drops (used for system events), the client automatically attempts to reconnect up to `maxRetries` times. System events will continue to be emitted after successful reconnection. A `close` event is only emitted after all reconnection attempts have been exhausted.
 
 ### `client.sendCommand(command: string | Command): Promise<string>`
 
@@ -188,6 +195,6 @@ These utility functions are used by `pipeThrough()` or `then()` of Promise<Reada
 
 The `Client` instance extends `EventEmitter`.
 
-- **`system`** (subsystem: string): Emitted when MPD reports a change in one of its subsystems (e.g., `player`, `mixer`, `options`, `playlist`).
+- **`system`** (subsystem: string): Emitted when MPD reports a change in one of its subsystems (e.g., `player`, `mixer`, `options`, `playlist`). This event continues to be emitted after automatic reconnection.
 - **`error`** (error: Error): Emitted when a connection or protocol error occurs within the connection pool or event monitoring.
-- **`close`**: Emitted when the `disconnect()` method is called and the client finishes closing connections.
+- **`close`** (error?: Error): Emitted when the `disconnect()` method is called, or when the event monitoring connection fails after exhausting all reconnection attempts. If an error is provided, the connection was closed due to that error.
