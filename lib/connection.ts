@@ -318,7 +318,7 @@ export class Connection extends EventEmitter {
 	/**
 	 * Executes a list of MPD commands atomically using command_list_ok_begin/end.
 	 * @param commands - An array of command strings or Command objects.
-	 * @returns A ReadableStream that yields response lines for the entire list.
+	 * @returns A ReadableStream that yields response lines for the entire list, including list_OK.
 	 */
 	executeCommands(
 		commands: (string | Command)[],
