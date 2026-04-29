@@ -144,20 +144,7 @@ export class Connection extends EventEmitter {
 		let buffer = "";
 		const decoder = new StringDecoder("utf8");
 		let isCleanedUp = false;
-
-		const cleanupListeners = () => {
-			if (isCleanedUp) return;
-			isCleanedUp = true;
-			this.socket.removeAllListeners("data");
-			this.socket.removeAllListeners("error");
-			this.socket.removeAllListeners("close");
-			const remaining = decoder.end();
-			if (remaining) {
-				debug("StringDecoder flushed remaining bytes during cleanup");
-			}
-			this.isExecutingCommand = false;
-			this.emit(this.COMMAND_EXECUTION_FINISHED);
-		};
+		let cleanupListeners!: () => void;
 
 		const stream = new ReadableStream<ResponseLine>({
 			start: (controller) => {
@@ -292,7 +279,19 @@ export class Connection extends EventEmitter {
 					cleanupListeners();
 				};
 
-				// Attach listeners
+				cleanupListeners = () => {
+					if (isCleanedUp) return;
+					isCleanedUp = true;
+					this.socket.off("data", dataListener);
+					this.socket.off("error", errorListener);
+					this.socket.off("close", closeListener);
+					if (decoder.end()) {
+						debug("StringDecoder flushed remaining bytes during cleanup");
+					}
+					this.isExecutingCommand = false;
+					this.emit(this.COMMAND_EXECUTION_FINISHED);
+				};
+
 				this.socket.on("data", dataListener);
 				this.socket.on("error", errorListener);
 				this.socket.on("close", closeListener);
