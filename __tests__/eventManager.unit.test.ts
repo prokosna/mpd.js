@@ -260,4 +260,125 @@ describe("EventManager Reconnection", () => {
 
 		await eventManager.stopMonitoring();
 	});
+
+	describe("Line buffering across data chunks", () => {
+		it("should not emit a partial event when 'changed: player' is split mid-line", async () => {
+			const mockConnection = new MockConnection();
+			vi.spyOn(connectionPool, "createDedicatedConnection").mockResolvedValue(
+				// biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
+				mockConnection as any,
+			);
+
+			const eventManager = new EventManager(emitter, connectionPool, config);
+			await eventManager.startMonitoring();
+
+			const systemEvents: string[] = [];
+			emitter.on("system", (subsystem) => {
+				systemEvents.push(subsystem);
+			});
+
+			// Split a single MPD response across multiple data events.
+			// The first chunk ends mid-line ("pla") and must NOT be flushed
+			// as a bogus 'system-pla' event.
+			mockConnection.socket.emit("data", Buffer.from("changed: pla"));
+			expect(systemEvents).toEqual([]);
+
+			mockConnection.socket.emit("data", Buffer.from("yer\nOK\n"));
+			expect(systemEvents).toEqual(["player"]);
+
+			await eventManager.stopMonitoring();
+		});
+
+		it("should emit multiple events when several lines arrive in one chunk", async () => {
+			const mockConnection = new MockConnection();
+			vi.spyOn(connectionPool, "createDedicatedConnection").mockResolvedValue(
+				// biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
+				mockConnection as any,
+			);
+
+			const eventManager = new EventManager(emitter, connectionPool, config);
+			await eventManager.startMonitoring();
+
+			const systemEvents: string[] = [];
+			emitter.on("system", (subsystem) => {
+				systemEvents.push(subsystem);
+			});
+
+			mockConnection.socket.emit(
+				"data",
+				Buffer.from("changed: player\nchanged: mixer\nOK\n"),
+			);
+
+			expect(systemEvents).toEqual(["player", "mixer"]);
+
+			await eventManager.stopMonitoring();
+		});
+
+		it("should not detect 'OK' when split across two chunks until both arrive", async () => {
+			const mockConnection = new MockConnection();
+			vi.spyOn(connectionPool, "createDedicatedConnection").mockResolvedValue(
+				// biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
+				mockConnection as any,
+			);
+
+			const eventManager = new EventManager(emitter, connectionPool, config);
+			await eventManager.startMonitoring();
+
+			// Initial idle write happens during startMonitoring.
+			expect(mockConnection.socket.write).toHaveBeenCalledTimes(1);
+
+			// 'O' alone must not trigger the OK branch (which would write 'idle\n' again).
+			mockConnection.socket.emit("data", Buffer.from("changed: player\nO"));
+			expect(mockConnection.socket.write).toHaveBeenCalledTimes(1);
+
+			// Once the rest of the line arrives, OK is recognized and re-idle is sent.
+			mockConnection.socket.emit("data", Buffer.from("K\n"));
+			expect(mockConnection.socket.write).toHaveBeenCalledTimes(2);
+			expect(mockConnection.socket.write).toHaveBeenLastCalledWith(
+				"idle\n",
+				"utf8",
+				expect.any(Function),
+			);
+
+			await eventManager.stopMonitoring();
+		});
+
+		it("should reset the line buffer on reconnect", async () => {
+			vi.useFakeTimers();
+
+			const mockConnection1 = new MockConnection();
+			const mockConnection2 = new MockConnection();
+
+			vi.spyOn(connectionPool, "createDedicatedConnection")
+				// biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
+				.mockResolvedValueOnce(mockConnection1 as any)
+				// biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
+				.mockResolvedValueOnce(mockConnection2 as any);
+
+			const eventManager = new EventManager(emitter, connectionPool, config);
+			await eventManager.startMonitoring();
+
+			const systemEvents: string[] = [];
+			emitter.on("system", (subsystem) => {
+				systemEvents.push(subsystem);
+			});
+
+			// Send a partial line on the first connection, then close before
+			// the line completes. The leftover bytes must NOT bleed into the
+			// next connection's buffer.
+			mockConnection1.socket.emit("data", Buffer.from("changed: pla"));
+			mockConnection1.socket.emit("close", false);
+
+			await vi.advanceTimersByTimeAsync(config.reconnectDelay || 100);
+
+			// On the new connection, deliver a fresh, complete event.
+			mockConnection2.socket.emit("data", Buffer.from("changed: mixer\nOK\n"));
+
+			// Only 'mixer' should be observed; the dangling 'pla' from the
+			// previous connection must not produce 'plamixer' or any partial.
+			expect(systemEvents).toEqual(["mixer"]);
+
+			await eventManager.stopMonitoring();
+		});
+	});
 });

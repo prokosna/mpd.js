@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { StringDecoder } from "node:string_decoder";
 import type { Connection, ConnectionPool } from "./connection.js";
 import type { Config } from "./client.js";
 import { ACK_PREFIX, CHANGED_EVENT_PREFIX, OK, PACKAGE_NAME } from "./const.js";
@@ -194,46 +195,45 @@ export class EventManager extends EventEmitter {
 	}
 
 	/**
-	 * Handles incoming data chunks on the dedicated event connection.
-	 * Parses lines, emits 'system-<subsystem>' events for 'changed:' lines,
-	 * handles 'OK' to re-enter idle state, and handles 'ACK' errors.
-	 * @param data - The data chunk received from the socket.
+	 * Handles a single line received on the dedicated event connection.
+	 * Emits 'system-<subsystem>' events for 'changed:' lines, handles 'OK'
+	 * to re-enter idle state, and handles 'ACK' errors.
+	 * Lines are buffered and split on '\n' boundaries by setupConnectionListeners
+	 * before reaching this method, since TCP data events do not align with
+	 * line boundaries.
+	 * @param line - A single complete line (without trailing newline).
 	 * @private
 	 */
-	private handleEventData(data: string): void {
-		const lines = data.toString().split("\n");
-
-		for (const line of lines) {
-			if (line.startsWith(CHANGED_EVENT_PREFIX)) {
-				const subsystem = line.substring(CHANGED_EVENT_PREFIX.length).trim();
-				if (subsystem) {
-					debug(`Emitting event: system-${subsystem}`);
-					this.emitter.emit(`system-${subsystem}`);
-					this.emitter.emit("system", subsystem);
-				}
-			} else if (line === OK) {
-				this.idling = false;
-				if (this.isMonitoring) {
-					debug("Restarting idling...");
-					this.startIdling();
-				} else {
-					debug("Monitoring is stopped, not restarting idle.");
-				}
-			} else if (line.startsWith(ACK_PREFIX)) {
-				this.idling = false;
-				debug("Received ACK during idle: %s", line);
-				this.emitter.emit(
-					"error",
-					new MpdError(line, "Error received during idle"),
-				);
-				// Attempt to restart idling if monitoring is still active
-				if (this.isMonitoring) {
-					debug("Attempting to restart idling after ACK...");
-					this.startIdling();
-				}
-			} else if (line) {
-				debug("Received unexpected line on event connection:", line);
+	private handleEventLine(line: string): void {
+		if (line.startsWith(CHANGED_EVENT_PREFIX)) {
+			const subsystem = line.substring(CHANGED_EVENT_PREFIX.length).trim();
+			if (subsystem) {
+				debug(`Emitting event: system-${subsystem}`);
+				this.emitter.emit(`system-${subsystem}`);
+				this.emitter.emit("system", subsystem);
 			}
+		} else if (line === OK) {
+			this.idling = false;
+			if (this.isMonitoring) {
+				debug("Restarting idling...");
+				this.startIdling();
+			} else {
+				debug("Monitoring is stopped, not restarting idle.");
+			}
+		} else if (line.startsWith(ACK_PREFIX)) {
+			this.idling = false;
+			debug("Received ACK during idle: %s", line);
+			this.emitter.emit(
+				"error",
+				new MpdError(line, "Error received during idle"),
+			);
+			// Attempt to restart idling if monitoring is still active
+			if (this.isMonitoring) {
+				debug("Attempting to restart idling after ACK...");
+				this.startIdling();
+			}
+		} else if (line) {
+			debug("Received unexpected line on event connection:", line);
 		}
 	}
 
@@ -242,8 +242,18 @@ export class EventManager extends EventEmitter {
 			return;
 		}
 
+		let buffer = "";
+		const decoder = new StringDecoder("utf8");
+
 		this.connection.socket.on("data", (data: Buffer) => {
-			this.handleEventData(data.toString("utf8"));
+			buffer += decoder.write(data);
+			let newlineIndex = buffer.indexOf("\n");
+			while (newlineIndex !== -1) {
+				const line = buffer.substring(0, newlineIndex);
+				buffer = buffer.substring(newlineIndex + 1);
+				this.handleEventLine(line);
+				newlineIndex = buffer.indexOf("\n");
+			}
 		});
 
 		this.connection.socket.on("close", (hadError: boolean) => {
