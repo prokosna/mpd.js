@@ -61,7 +61,6 @@ export class Client extends EventEmitter {
 	private commandExecutor: CommandExecutor;
 	private eventManager: EventManager;
 	private mpdVersion = "unknown";
-	private totalListeners = 0;
 
 	/**
 	 * Private constructor. Use MpdClient.connect() to create instances.
@@ -73,15 +72,10 @@ export class Client extends EventEmitter {
 		this.commandExecutor = new CommandExecutor(this.connectionPool);
 		this.eventManager = new EventManager(this, this.connectionPool, config);
 
-		this.on("newListener", async (event: string) => {
-			if (!event.includes("system")) {
-				return;
-			}
-			this.totalListeners++;
-			if (this.totalListeners === 1) {
-				await this.eventManager.startMonitoring();
-				debug("Event monitoring started.");
-			}
+		this.on("newListener", (event: string | symbol) => {
+			if (typeof event !== "string") return;
+			if (event !== "system" && !event.startsWith("system-")) return;
+			void this.eventManager.startMonitoring().catch(() => undefined);
 		});
 	}
 
