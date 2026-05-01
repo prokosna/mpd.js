@@ -41,19 +41,20 @@ export type Config = net.NetConnectOpts & {
  * @returns The configuration object with defaults applied.
  */
 function applyDefaultValuesIfNotSet(config: Config): Config {
-	if ("path" in config) {
-		if (config.path.startsWith("~")) {
-			config.path = config.path.replace(/^~/, os.homedir());
+	const out: Config = { ...config };
+	if ("path" in out) {
+		if (out.path.startsWith("~")) {
+			out.path = out.path.replace(/^~/, os.homedir());
 		}
 	} else {
-		config.host ??= process.env.MPD_HOST || "localhost";
-		config.port ??= Number(process.env.MPD_PORT) || 6600;
+		out.host ??= process.env.MPD_HOST || "localhost";
+		out.port ??= Number(process.env.MPD_PORT) || 6600;
 	}
-	config.timeout ??= Number(process.env.MPD_TIMEOUT) || 5000;
-	config.poolSize ??= 3;
-	config.reconnectDelay ??= 5000;
-	config.maxRetries ??= 3;
-	return config;
+	out.timeout ??= Number(process.env.MPD_TIMEOUT) || 5000;
+	out.poolSize ??= 3;
+	out.reconnectDelay ??= 5000;
+	out.maxRetries ??= 3;
+	return out;
 }
 
 /**

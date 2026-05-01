@@ -3,10 +3,13 @@ import type { Config } from "../lib/client";
 
 const startMonitoring = vi.fn().mockResolvedValue("0.23.5");
 const stopMonitoring = vi.fn().mockResolvedValue(undefined);
+const createDedicatedConnection = vi.fn();
 
 vi.mock("../lib/connection", () => {
 	return {
-		ConnectionPool: vi.fn().mockImplementation(() => ({})),
+		ConnectionPool: vi.fn().mockImplementation(() => ({
+			createDedicatedConnection,
+		})),
 		Connection: vi.fn(),
 	};
 });
@@ -106,5 +109,27 @@ describe("Client system-event listener handling", () => {
 		await flush();
 
 		expect(startMonitoring).toHaveBeenCalledTimes(3);
+	});
+});
+
+describe("Client.connect config handling", () => {
+	beforeEach(() => {
+		createDedicatedConnection.mockReset();
+	});
+
+	it("does not mutate the caller's config object", async () => {
+		createDedicatedConnection.mockRejectedValue(new Error("nope"));
+
+		const config: Config = {
+			host: "localhost",
+			port: 6600,
+			maxRetries: 0,
+			reconnectDelay: 0,
+		};
+		const snapshot = JSON.parse(JSON.stringify(config));
+
+		await expect(Client.connect(config)).rejects.toThrow();
+
+		expect(config).toEqual(snapshot);
 	});
 });
