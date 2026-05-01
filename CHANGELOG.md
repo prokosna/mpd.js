@@ -4,7 +4,7 @@ All notable changes to `mpd3` are documented in this file.
 Versioning follows [Semantic Versioning](https://semver.org/), and the
 git tag `vX.Y.Z` matches the `mpd3@X.Y.Z` published to the npm registry.
 
-## [1.2.0] - 2026-05-01
+## [2.0.0] - 2026-05-01
 
 First release published to the npm registry. Existing GitHub-installed
 consumers (`npm install github:prokosna/mpd.js#vX.Y.Z`) continue to
@@ -48,8 +48,8 @@ work unchanged.
 
 ## Earlier history
 
-Versions prior to `1.2.0` were distributed only via GitHub
+Versions prior to `2.0.0` were distributed only via GitHub
 (`prokosna/mpd.js`), not the npm registry. See the project history at
 <https://github.com/prokosna/mpd.js> for details.
 
-[1.2.0]: https://github.com/prokosna/mpd.js/releases/tag/v1.2.0
+[2.0.0]: https://github.com/prokosna/mpd.js/releases/tag/v2.0.0
