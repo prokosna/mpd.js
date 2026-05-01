@@ -202,7 +202,6 @@ export class EventManager extends EventEmitter {
 					new Error(`Failed to send noidle command: ${err.message}`),
 				);
 			}
-			this.idling = false;
 		});
 		this.idling = false;
 	}
