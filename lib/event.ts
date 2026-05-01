@@ -23,6 +23,7 @@ export class EventManager extends EventEmitter {
 	private reconnectAttempts = 0;
 	private reconnectTimer?: NodeJS.Timeout;
 	private isReconnecting = false;
+	private inFlightStart?: Promise<string | undefined>;
 
 	/**
 	 * Creates an instance of EventManager.
@@ -45,39 +46,51 @@ export class EventManager extends EventEmitter {
 
 	/**
 	 * Establishes a dedicated connection for monitoring MPD events and starts idling.
-	 * Returns the MPD version upon successful connection.
-	 * Rejects if monitoring is already active or fails to establish a connection.
-	 * @returns A promise that resolves with the MPD version string.
+	 * Concurrent callers share the in-flight attempt and resolve to the same value.
+	 * On failure, emits an `error` event on the client emitter and resolves to
+	 * `undefined` (does not reject), so callers do not need to attach a `.catch`.
+	 * @returns A promise that resolves with the MPD version string on success,
+	 *   or `undefined` on failure.
 	 */
-	async startMonitoring(): Promise<string> {
+	async startMonitoring(): Promise<string | undefined> {
 		if (this.connection !== undefined) {
 			debug("Event monitoring is already active.");
 			return this.connection.getMpdVersion();
 		}
+		if (this.inFlightStart) {
+			return this.inFlightStart;
+		}
 
 		debug("Starting event monitoring...");
-		try {
-			this.connection = await this.connectionPool.createDedicatedConnection();
-			this.setupConnectionListeners();
-			this.startIdling();
-			this.isMonitoring = true;
-
-			return this.connection.getMpdVersion();
-		} catch (error) {
-			debug("Failed to start event monitoring:", error);
-			if (this.connection !== undefined) {
-				await this.connection
-					.disconnect()
-					.catch((e) =>
-						debug("Error disconnecting after failed monitoring start:", e),
-					);
-				this.connection = undefined;
+		this.inFlightStart = (async (): Promise<string | undefined> => {
+			try {
+				this.connection = await this.connectionPool.createDedicatedConnection();
+				this.setupConnectionListeners();
+				this.startIdling();
+				this.isMonitoring = true;
+				return this.connection.getMpdVersion();
+			} catch (error) {
+				debug("Failed to start event monitoring:", error);
+				if (this.connection !== undefined) {
+					await this.connection
+						.disconnect()
+						.catch((e) =>
+							debug("Error disconnecting after failed monitoring start:", e),
+						);
+					this.connection = undefined;
+				}
+				this.emitter.emit(
+					"error",
+					new Error(`Failed to start monitoring: ${error.message}`),
+				);
+				return undefined;
 			}
-			this.emitter.emit(
-				"error",
-				new Error(`Failed to start monitoring: ${error.message}`),
-			);
-			throw error;
+		})();
+
+		try {
+			return await this.inFlightStart;
+		} finally {
+			this.inFlightStart = undefined;
 		}
 	}
 

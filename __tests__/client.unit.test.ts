@@ -97,7 +97,7 @@ describe("Client system-event listener handling", () => {
 		expect(stopMonitoring).not.toHaveBeenCalled();
 	});
 
-	it("invokes startMonitoring once per matching newListener (deduplication is EventManager's responsibility, see Task 6)", async () => {
+	it("invokes startMonitoring on every matching newListener; EventManager deduplicates the actual connection attempt", async () => {
 		const client = new ClientCtor({ host: "localhost", port: 6600 });
 
 		client.on("system", () => {});
@@ -106,22 +106,5 @@ describe("Client system-event listener handling", () => {
 		await flush();
 
 		expect(startMonitoring).toHaveBeenCalledTimes(3);
-	});
-
-	it("does not surface startMonitoring rejections as unhandled", async () => {
-		startMonitoring.mockRejectedValueOnce(new Error("boom"));
-
-		const client = new ClientCtor({ host: "localhost", port: 6600 });
-
-		const unhandledRejections: unknown[] = [];
-		const onUnhandled = (reason: unknown) => unhandledRejections.push(reason);
-		process.on("unhandledRejection", onUnhandled);
-
-		client.on("system", () => {});
-		await flush();
-		await flush();
-
-		process.off("unhandledRejection", onUnhandled);
-		expect(unhandledRejections).toHaveLength(0);
 	});
 });

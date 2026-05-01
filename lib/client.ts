@@ -80,7 +80,7 @@ export class Client extends EventEmitter {
 		this.on("newListener", (event: string | symbol) => {
 			if (typeof event !== "string") return;
 			if (event !== "system" && !event.startsWith("system-")) return;
-			void this.eventManager.startMonitoring().catch(() => undefined);
+			void this.eventManager.startMonitoring();
 		});
 	}
 

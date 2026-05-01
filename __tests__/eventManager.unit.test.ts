@@ -381,4 +381,50 @@ describe("EventManager Reconnection", () => {
 			await eventManager.stopMonitoring();
 		});
 	});
+
+	describe("startMonitoring failure contract", () => {
+		it("emits 'error' instead of throwing when createDedicatedConnection fails", async () => {
+			const failure = new Error("ECONNREFUSED");
+			vi.spyOn(connectionPool, "createDedicatedConnection").mockRejectedValue(
+				failure,
+			);
+
+			const eventManager = new EventManager(emitter, connectionPool, config);
+
+			const errors: Error[] = [];
+			emitter.on("error", (err: Error) => {
+				errors.push(err);
+			});
+
+			const result = await eventManager.startMonitoring();
+
+			expect(result).toBeUndefined();
+			expect(errors).toHaveLength(1);
+			expect(errors[0]?.message).toContain("Failed to start monitoring");
+			expect(errors[0]?.message).toContain(failure.message);
+		});
+
+		it("is single-flight: concurrent startMonitoring calls share one connection attempt", async () => {
+			const mockConnection = new MockConnection();
+			const createSpy = vi
+				.spyOn(connectionPool, "createDedicatedConnection")
+				.mockImplementation(
+					// biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
+					() => Promise.resolve(mockConnection as any),
+				);
+
+			const eventManager = new EventManager(emitter, connectionPool, config);
+
+			const results = await Promise.all([
+				eventManager.startMonitoring(),
+				eventManager.startMonitoring(),
+				eventManager.startMonitoring(),
+			]);
+
+			expect(createSpy).toHaveBeenCalledTimes(1);
+			expect(results).toEqual(["0.23.5", "0.23.5", "0.23.5"]);
+
+			await eventManager.stopMonitoring();
+		});
+	});
 });
