@@ -17,7 +17,7 @@ The package is also installable directly from GitHub for users that
 prefer pinning to a tag:
 
 ```bash
-npm install github:prokosna/mpd.js#v1.2.0
+npm install github:prokosna/mpd.js#v1.1.1
 ```
 
 ## Basic Usage
