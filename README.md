@@ -9,7 +9,15 @@ This library is a re-write version of the original [mpd.js (mpd2)](https://githu
 ## Installation
 
 ```bash
-npm i prokosna/mpd.js
+# from npm registry (recommended)
+npm install mpd3
+```
+
+The package is also installable directly from GitHub for users that
+prefer pinning to a tag:
+
+```bash
+npm install github:prokosna/mpd.js#v1.2.0
 ```
 
 ## Basic Usage
@@ -177,24 +185,35 @@ Returns the MPD protocol version reported by the server during the initial conne
 
 ### `Parsers`
 
-There are several parsers available in the `Parsers` namespace:
+The following parser utilities are exported. They can be imported either
+as a `Parsers` namespace object (as shown in the examples above) or
+individually as named exports for better tree-shaking:
+
+```typescript
+import { Parsers } from "mpd3";
+// or
+import { transformToList, aggregateToList } from "mpd3";
+```
+
+Available utilities:
 
 - `transformToList`
 - `transformToListAndAccumulate`
 - `transformToObject`
 - `transformToTyped`
 - `aggregateToList`
-- `aggregateToObject`
+- `aggregateToString`
 - `takeFirstLineValue`
 - `takeFirstObject`
 - `takeFirstBinary`
 
-These utility functions are used by `pipeThrough()` or `then()` of Promise<ReadableStream>.
+These utility functions are used by `pipeThrough()` or `then()` of `Promise<ReadableStream>`.
 
 ## Events
 
-The `Client` instance extends `EventEmitter`.
+The `Client` class extends Node's [`EventEmitter`](https://nodejs.org/api/events.html#class-eventemitter), so the standard `client.on(...)`, `client.off(...)`, and `client.once(...)` methods are available. Listening on a `system`/`system-<subsystem>` event lazily starts the dedicated MPD idle connection; the connection lives until `client.disconnect()` is called.
 
 - **`system`** (subsystem: string): Emitted when MPD reports a change in one of its subsystems (e.g., `player`, `mixer`, `options`, `playlist`). This event continues to be emitted after automatic reconnection.
+- **`system-<subsystem>`** (no payload): Per-subsystem variant, emitted alongside `system`. For example, `client.on("system-player", () => { ... })` fires only when the `player` subsystem changes.
 - **`error`** (error: Error): Emitted when a connection or protocol error occurs within the connection pool or event monitoring.
 - **`close`** (error?: Error): Emitted when the `disconnect()` method is called, or when the event monitoring connection fails after exhausting all reconnection attempts. If an error is provided, the connection was closed due to that error.

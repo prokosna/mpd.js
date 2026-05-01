@@ -1,7 +1,6 @@
 import { Client } from "./client.js";
 import { Command } from "./command.js";
 import { MpdError } from "./error.js";
-import { Parsers } from "./parsers.js";
 import type {
 	MpdTypedObject,
 	ParsedAudio,
@@ -11,6 +10,19 @@ import type {
 } from "./types.js";
 
 export default Client;
+export type { ListParserOptions, ObjectParsingOptions } from "./parsers.js";
+export {
+	aggregateToList,
+	aggregateToString,
+	Parsers,
+	takeFirstBinary,
+	takeFirstLineValue,
+	takeFirstObject,
+	transformToList,
+	transformToListAndAccumulate,
+	transformToObject,
+	transformToTyped,
+} from "./parsers.js";
 export type {
 	MpdTypedObject,
 	ParsedAudio,
@@ -18,4 +30,4 @@ export type {
 	ParsedTime,
 	ResponseLine,
 };
-export { Client, Command, MpdError, Parsers };
+export { Client, Command, MpdError };
