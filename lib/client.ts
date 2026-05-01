@@ -22,7 +22,12 @@ export type Config = net.NetConnectOpts & {
 	poolSize?: number;
 	/** Delay in milliseconds before attempting to reconnect. Defaults to 5000. */
 	reconnectDelay?: number;
-	/** Maximum number of reconnection attempts. Defaults to 3. */
+	/**
+	 * Maximum number of *retry* attempts after a failed connection or a
+	 * dropped event-monitoring connection. The initial attempt is not
+	 * counted, so the total number of attempts on the initial connection
+	 * path is `1 + maxRetries`. Defaults to 3.
+	 */
 	maxRetries?: number;
 	/** MPD server password. */
 	password?: string;

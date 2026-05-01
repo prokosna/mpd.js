@@ -126,13 +126,13 @@ Establishes connection(s) to the MPD server and returns a connected `Client` ins
 - `timeout` (number): Connection timeout in milliseconds (default: `5000`).
 - `poolSize` (number): Maximum number of connections in the pool (default: `3`).
 - `reconnectDelay` (number): Delay in milliseconds between reconnection attempts (default: `5000`).
-- `maxRetries` (number): Maximum number of reconnection attempts. Used for both initial connection and event monitoring reconnection (default: `3`).
+- `maxRetries` (number): Maximum number of *retry* attempts after a failed connection or a dropped event-monitoring connection. The initial connection attempt is not counted as a retry, so the total number of attempts on the initial path is `1 + maxRetries`. Used for both initial connection and event monitoring reconnection (default: `3`).
 
 **Reconnection Behavior:**
 
 The client implements automatic reconnection in two scenarios:
 
-1. **Initial Connection**: If `Client.connect()` fails, it will retry up to `maxRetries` times with `reconnectDelay` between each attempt.
+1. **Initial Connection**: If the first attempt of `Client.connect()` fails, it will retry up to `maxRetries` more times with `reconnectDelay` between each attempt. With the default `maxRetries: 3`, this means up to 4 total attempts before rejecting.
 2. **Event Monitoring**: If the event monitoring connection drops (used for system events), the client automatically attempts to reconnect up to `maxRetries` times. System events will continue to be emitted after successful reconnection. A `close` event is only emitted after all reconnection attempts have been exhausted.
 
 ### `client.sendCommand(command: string | Command): Promise<string>`
