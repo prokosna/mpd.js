@@ -1,5 +1,5 @@
-import { Client, Parsers, MpdError, Command } from "../lib";
-import { expect, describe, beforeAll, afterAll, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Client, Command, MpdError, Parsers } from "../lib";
 
 describe("MpdClient Integration Tests", () => {
 	let client: Client;

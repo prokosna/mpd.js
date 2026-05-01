@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Config } from "../lib/client";
 
 const startMonitoring = vi.fn().mockResolvedValue("0.23.5");

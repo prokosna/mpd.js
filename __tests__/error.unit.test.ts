@@ -1,5 +1,5 @@
-import { describe, test, expect } from "vitest";
-import { MpdError, isError } from "../lib/error";
+import { describe, expect, test } from "vitest";
+import { isError, MpdError } from "../lib/error";
 
 describe("MPDError", () => {
 	test("should create error with code and message", () => {

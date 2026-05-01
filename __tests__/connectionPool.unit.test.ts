@@ -1,8 +1,8 @@
 import { EventEmitter } from "node:events";
-import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { NetConnectOpts, Socket } from "node:net";
-import { OK } from "../lib/const";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectionPool } from "../lib/connection";
+import { OK } from "../lib/const";
 
 class SimpleMockSocket extends EventEmitter {
 	destroyed = false;

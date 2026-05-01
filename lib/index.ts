@@ -1,24 +1,24 @@
 import { Client } from "./client.js";
-import { MpdError } from "./error.js";
 import { Command } from "./command.js";
+import { MpdError } from "./error.js";
 import { Parsers } from "./parsers.js";
 import {
-	ResponseLine,
-	ParsedTime,
-	ParsedRange,
-	ParsedAudio,
 	MpdTypedObject,
+	ParsedAudio,
+	ParsedRange,
+	ParsedTime,
+	ResponseLine,
 } from "./types.js";
 
 export default Client;
 export {
 	Client,
-	MpdError,
 	Command,
+	MpdError,
+	MpdTypedObject,
+	ParsedAudio,
+	ParsedRange,
+	ParsedTime,
 	Parsers,
 	ResponseLine,
-	ParsedTime,
-	ParsedRange,
-	ParsedAudio,
-	MpdTypedObject,
 };

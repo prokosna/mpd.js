@@ -1,10 +1,10 @@
-import { CommandExecutor } from "../lib/executor";
-import { ConnectionPool } from "../lib/connection";
-import type { Connection } from "../lib/connection";
-import { Command } from "../lib/command";
 import { ReadableStream } from "node:stream/web";
-import type { ResponseLine } from "../lib/types";
 import { beforeEach, describe, expect, it, type Mocked, vi } from "vitest";
+import { Command } from "../lib/command";
+import type { Connection } from "../lib/connection";
+import { ConnectionPool } from "../lib/connection";
+import { CommandExecutor } from "../lib/executor";
+import type { ResponseLine } from "../lib/types";
 
 const mockExecuteCommand =
 	vi.fn<(command: string | Command) => Promise<ReadableStream<ResponseLine>>>();

@@ -1,8 +1,8 @@
 import type { ReadableStream } from "node:stream/web";
-import type { Command } from "./command.js";
-import type { ConnectionPool, Connection } from "./connection.js";
-import { PACKAGE_NAME } from "./const.js";
 import debugCreator from "debug";
+import type { Command } from "./command.js";
+import type { Connection, ConnectionPool } from "./connection.js";
+import { PACKAGE_NAME } from "./const.js";
 import type { ResponseLine } from "./types.js";
 
 const debug = debugCreator(`${PACKAGE_NAME}:executor`);

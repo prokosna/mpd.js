@@ -1,8 +1,8 @@
 import { EventEmitter } from "node:events";
-import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
-import { EventManager } from "../lib/event";
-import { ConnectionPool } from "../lib/connection";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Config } from "../lib/client";
+import { ConnectionPool } from "../lib/connection";
+import { EventManager } from "../lib/event";
 
 class MockSocket extends EventEmitter {
 	write = vi.fn((_data: string, _encoding: string, callback?: () => void) => {

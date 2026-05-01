@@ -1,15 +1,15 @@
 import { EventEmitter } from "node:events";
-import type { Command } from "./command.js";
-import { ConnectionPool } from "./connection.js";
-import { CommandExecutor } from "./executor.js";
-import { EventManager } from "./event.js";
-import type { ReadableStream } from "node:stream/web";
-import type { ResponseLine } from "./types.js";
-import { OK, PACKAGE_NAME } from "./const.js";
-import debugCreator from "debug";
-import { Parsers } from "./parsers.js";
 import type * as net from "node:net";
 import os from "node:os";
+import type { ReadableStream } from "node:stream/web";
+import debugCreator from "debug";
+import type { Command } from "./command.js";
+import { ConnectionPool } from "./connection.js";
+import { OK, PACKAGE_NAME } from "./const.js";
+import { EventManager } from "./event.js";
+import { CommandExecutor } from "./executor.js";
+import { Parsers } from "./parsers.js";
+import type { ResponseLine } from "./types.js";
 
 const debug = debugCreator(`${PACKAGE_NAME}:client`);
 

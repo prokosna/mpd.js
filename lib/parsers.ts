@@ -1,14 +1,14 @@
 import type { Buffer } from "node:buffer";
-import type { ResponseLine, MpdTypedObject } from "./types.js";
-import { TransformStream } from "node:stream/web";
 import type { ReadableStream } from "node:stream/web";
+import { TransformStream } from "node:stream/web";
 import {
+	fieldParsers,
+	LineToListAndAccumulateTransformer,
+	LineToListTransformer,
 	normalizeKey,
 	parseLineToKeyValue,
-	fieldParsers,
-	LineToListTransformer,
-	LineToListAndAccumulateTransformer,
 } from "./parserUtils.js";
+import type { MpdTypedObject, ResponseLine } from "./types.js";
 
 /**
  * Common options for parsing MPD responses into objects.

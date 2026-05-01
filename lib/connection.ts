@@ -1,22 +1,22 @@
+import { randomUUID } from "node:crypto";
+import { EventEmitter } from "node:events";
 import type { Socket } from "node:net";
 import { createConnection } from "node:net";
 import { ReadableStream } from "node:stream/web";
 import { StringDecoder } from "node:string_decoder";
-import type { Command } from "./command.js";
+import debugCreator from "debug";
 import type { Config } from "./client.js";
-import { MpdError } from "./error.js";
+import type { Command } from "./command.js";
 import {
 	ACK_PREFIX,
 	BINARY_HEADER_REGEX,
+	EVENT_CONNECTION_AVAILABLE,
 	OK,
 	PACKAGE_NAME,
-	EVENT_CONNECTION_AVAILABLE,
 } from "./const.js";
-import debugCreator from "debug";
-import type { ResponseLine } from "./types.js";
-import { EventEmitter } from "node:events";
+import { MpdError } from "./error.js";
 import { escapeArg } from "./parserUtils.js";
-import { randomUUID } from "node:crypto";
+import type { ResponseLine } from "./types.js";
 
 const debug = debugCreator(`${PACKAGE_NAME}:connection`);
 

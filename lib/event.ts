@@ -1,9 +1,9 @@
 import { EventEmitter } from "node:events";
 import { StringDecoder } from "node:string_decoder";
-import type { Connection, ConnectionPool } from "./connection.js";
-import type { Config } from "./client.js";
-import { ACK_PREFIX, CHANGED_EVENT_PREFIX, OK, PACKAGE_NAME } from "./const.js";
 import debugCreator from "debug";
+import type { Config } from "./client.js";
+import type { Connection, ConnectionPool } from "./connection.js";
+import { ACK_PREFIX, CHANGED_EVENT_PREFIX, OK, PACKAGE_NAME } from "./const.js";
 import { MpdError } from "./error.js";
 
 const debug = debugCreator(`${PACKAGE_NAME}:event`);
