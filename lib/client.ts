@@ -127,7 +127,6 @@ export class Client extends EventEmitter {
 		}
 
 		debug("All connection attempts failed.");
-		await client.disconnect();
 		throw (
 			lastError ||
 			new Error(
