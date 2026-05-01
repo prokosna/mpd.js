@@ -2,7 +2,7 @@ import { Client } from "./client.js";
 import { Command } from "./command.js";
 import { MpdError } from "./error.js";
 import { Parsers } from "./parsers.js";
-import {
+import type {
 	MpdTypedObject,
 	ParsedAudio,
 	ParsedRange,
@@ -11,14 +11,11 @@ import {
 } from "./types.js";
 
 export default Client;
-export {
-	Client,
-	Command,
-	MpdError,
+export type {
 	MpdTypedObject,
 	ParsedAudio,
 	ParsedRange,
 	ParsedTime,
-	Parsers,
 	ResponseLine,
 };
+export { Client, Command, MpdError, Parsers };
