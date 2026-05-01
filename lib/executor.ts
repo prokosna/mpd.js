@@ -80,7 +80,11 @@ export class CommandExecutor {
 			item.reject(error);
 		} finally {
 			if (connection) {
-				this.connectionPool.releaseConnection(connection);
+				try {
+					await this.connectionPool.releaseConnection(connection);
+				} catch (error) {
+					debug(`Error releasing connection: ${error.message}`);
+				}
 			}
 			debug("Finished command processing.");
 		}

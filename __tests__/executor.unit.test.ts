@@ -129,5 +129,27 @@ describe("CommandQueue Unit Tests", () => {
 
 			mockGetConnection.mockResolvedValue(mockConnection);
 		});
+
+		it("should swallow releaseConnection rejection without becoming an unhandled rejection", async () => {
+			const releaseError = new Error(
+				"Attempted to release connection X which is not managed by this pool.",
+			);
+			mockReleaseConnection.mockRejectedValueOnce(releaseError as never);
+
+			const unhandledRejections: unknown[] = [];
+			const onUnhandled = (reason: unknown) => unhandledRejections.push(reason);
+			process.on("unhandledRejection", onUnhandled);
+
+			try {
+				await commandQueue.execute("status");
+				await yieldExecution();
+				await yieldExecution();
+
+				expect(mockReleaseConnection).toHaveBeenCalledTimes(1);
+				expect(unhandledRejections).toHaveLength(0);
+			} finally {
+				process.off("unhandledRejection", onUnhandled);
+			}
+		});
 	});
 });
