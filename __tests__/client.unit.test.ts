@@ -7,25 +7,31 @@ const createDedicatedConnection = vi.fn();
 
 vi.mock("../lib/connection", () => {
 	return {
-		ConnectionPool: vi.fn().mockImplementation(() => ({
-			createDedicatedConnection,
-		})),
+		ConnectionPool: vi.fn().mockImplementation(function () {
+			return {
+				createDedicatedConnection,
+			};
+		}),
 		Connection: vi.fn(),
 	};
 });
 
 vi.mock("../lib/event", () => {
 	return {
-		EventManager: vi.fn().mockImplementation(() => ({
-			startMonitoring,
-			stopMonitoring,
-		})),
+		EventManager: vi.fn().mockImplementation(function () {
+			return {
+				startMonitoring,
+				stopMonitoring,
+			};
+		}),
 	};
 });
 
 vi.mock("../lib/executor", () => {
 	return {
-		CommandExecutor: vi.fn().mockImplementation(() => ({})),
+		CommandExecutor: vi.fn().mockImplementation(function () {
+			return {};
+		}),
 	};
 });
 

@@ -28,7 +28,7 @@ const mockEmit = vi.fn();
 
 vi.mock("../lib/connection", () => {
 	return {
-		ConnectionPool: vi.fn().mockImplementation((config) => {
+		ConnectionPool: vi.fn().mockImplementation(function (config) {
 			return {
 				getConnection: mockGetConnection,
 				releaseConnection: mockReleaseConnection,
