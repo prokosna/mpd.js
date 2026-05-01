@@ -64,7 +64,7 @@ export class CommandExecutor {
 	 * Processes a single item.
 	 */
 	private async processItem(item: CommandItem): Promise<void> {
-		let connection: Connection | undefined = undefined;
+		let connection: Connection | undefined;
 		try {
 			connection = await this.connectionPool.getConnection();
 

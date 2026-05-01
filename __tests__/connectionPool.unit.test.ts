@@ -59,7 +59,7 @@ let createdSockets: SimpleMockSocket[] = [];
 let shouldFailNextConnection = false;
 
 const mocks = vi.hoisted(() => {
-	const mockCreateConnectionFn = (config: NetConnectOpts): Socket => {
+	const mockCreateConnectionFn = (_config: NetConnectOpts): Socket => {
 		const socket = new SimpleMockSocket();
 		createdSockets.push(socket);
 

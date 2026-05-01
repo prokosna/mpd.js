@@ -5,7 +5,7 @@ import { ConnectionPool } from "../lib/connection";
 import type { Config } from "../lib/client";
 
 class MockSocket extends EventEmitter {
-	write = vi.fn((data: string, encoding: string, callback?: () => void) => {
+	write = vi.fn((_data: string, _encoding: string, callback?: () => void) => {
 		if (callback) callback();
 		return true;
 	});

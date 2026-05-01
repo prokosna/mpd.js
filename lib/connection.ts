@@ -104,7 +104,7 @@ export class Connection extends EventEmitter {
 				reject(err);
 			});
 
-			socket.once("close", (hadError) => {
+			socket.once("close", (_hadError) => {
 				clearTimeout(timer);
 				reject(new Error("Connection closed before MPD welcome message."));
 			});
@@ -154,7 +154,7 @@ export class Connection extends EventEmitter {
 				let expectedBinaryBytes = 0;
 				let receivedBinaryBytes = 0;
 				let binaryBufferAccumulator: Buffer[] = [];
-				let pendingBinaryLine: ResponseLine | undefined = undefined;
+				let pendingBinaryLine: ResponseLine | undefined;
 
 				const enqueueRegularTextLine = (rawLine: string) => {
 					const line: ResponseLine = { raw: rawLine };

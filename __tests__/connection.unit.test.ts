@@ -48,7 +48,7 @@ let lastCreatedSocket: SimpleMockSocket | null = null;
 
 // --- Hoisted Mock ---
 const mocks = vi.hoisted(() => {
-	const mockCreateConnectionFn = (config: NetConnectOpts): Socket => {
+	const mockCreateConnectionFn = (_config: NetConnectOpts): Socket => {
 		const socket = new SimpleMockSocket();
 		lastCreatedSocket = socket;
 		process.nextTick(() => socket.emit("connect"));
