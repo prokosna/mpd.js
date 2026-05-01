@@ -1,5 +1,5 @@
 {
-  "name": "mpd3",
+  "name": "@prokosna/mpd3",
   "version": "2.0.0",
   "description": "Low level MPD (Music Player Daemon) client with Web Streams API",
   "main": "./dist/index.cjs",

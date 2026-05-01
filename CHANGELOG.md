@@ -1,30 +1,46 @@
 # Changelog
 
-All notable changes to `mpd3` are documented in this file.
+All notable changes to `@prokosna/mpd3` are documented in this file.
 Versioning follows [Semantic Versioning](https://semver.org/), and the
-git tag `vX.Y.Z` matches the `mpd3@X.Y.Z` published to the npm registry.
+git tag `vX.Y.Z` matches the `@prokosna/mpd3@X.Y.Z` published to the
+npm registry.
 
 ## [2.0.0] - 2026-05-01
 
-First release published to the npm registry. Existing GitHub-installed
-consumers (`npm install github:prokosna/mpd.js#vX.Y.Z`) continue to
-work unchanged.
+First release published to the npm registry, under the scoped name
+`@prokosna/mpd3`. Existing GitHub-installed consumers
+(`npm install github:prokosna/mpd.js#vX.Y.Z`) continue to work
+unchanged.
+
+### Breaking changes
+
+- **Package renamed to `@prokosna/mpd3`.** The original unscoped
+  name `mpd3` was rejected by the npm name policy as too similar to
+  existing popular packages (`d3`, `md5`, `spdy`). All imports must
+  be updated from `from "mpd3"` to `from "@prokosna/mpd3"`. There
+  are no other source-level breaking changes.
 
 ### Added
 
-- Named exports for parser utilities — `import { transformToList, ... }
-  from "mpd3"` works alongside the existing `import { Parsers } from
-  "mpd3"` namespace object.
+- Named exports for parser utilities —
+  `import { transformToList, ... } from "@prokosna/mpd3"` works
+  alongside the existing `import { Parsers } from "@prokosna/mpd3"`
+  namespace object.
 - `engines.node: ">=18"` declared in `package.json`.
 
 ### Changed
 
-- Migrated the dual ESM + CJS build from `tsc` to `tsdown`. `dist/` now
-  contains bundled `index.{js,cjs,d.ts,d.cts}` instead of per-file
-  output under `dist/{esm,cjs}/`. Only the documented `import 'mpd3'`
-  entry point was ever exposed, so this is internal.
-- Linter is now driven by `biome check` (lint + format + assist) via
-  `npm run lint` / `npm run lint:fix`; CI no longer runs auto-fixers.
+- Migrated the dual ESM + CJS build from `tsc` to `tsdown`. `dist/`
+  now contains bundled `index.{mjs,cjs,d.mts,d.cts}` (tsdown emits
+  explicit `.mjs`/`.cjs` extensions regardless of
+  `package.json#type`) instead of per-file output under
+  `dist/{esm,cjs}/`. The `exports`, `module`, and `types` fields in
+  `package.json` are aligned to those filenames. Only the
+  documented `import '@prokosna/mpd3'` entry point was ever
+  exposed, so this is internal.
+- Linter is now driven by `biome check` (lint + format + assist)
+  via `npm run lint` / `npm run lint:fix`; CI no longer runs
+  auto-fixers.
 
 ### Fixed
 

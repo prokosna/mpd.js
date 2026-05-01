@@ -350,11 +350,11 @@ export async function takeFirstBinary(
  *
  * @example
  * ```typescript
- * import { Parsers } from "mpd3";
+ * import { Parsers } from "@prokosna/mpd3";
  * stream.pipeThrough(Parsers.transformToList({ delimiterKeys: "file" }));
  *
  * // Equivalent, tree-shakable form:
- * import { transformToList } from "mpd3";
+ * import { transformToList } from "@prokosna/mpd3";
  * stream.pipeThrough(transformToList({ delimiterKeys: "file" }));
  * ```
  */

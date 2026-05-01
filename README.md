@@ -10,20 +10,20 @@ This library is a re-write version of the original [mpd.js (mpd2)](https://githu
 
 ```bash
 # from npm registry (recommended)
-npm install mpd3
+npm install @prokosna/mpd3
 ```
 
 The package is also installable directly from GitHub for users that
 prefer pinning to a tag:
 
 ```bash
-npm install github:prokosna/mpd.js#v1.1.1
+npm install github:prokosna/mpd.js#2.0.0
 ```
 
 ## Basic Usage
 
 ```typescript
-import { Client, Parsers } from "mpd3";
+import { Client, Parsers } from "@prokosna/mpd3";
 
 async function main() {
   // Connect to MPD server (defaults to localhost:6600)
@@ -190,9 +190,9 @@ as a `Parsers` namespace object (as shown in the examples above) or
 individually as named exports for better tree-shaking:
 
 ```typescript
-import { Parsers } from "mpd3";
+import { Parsers } from "@prokosna/mpd3";
 // or
-import { transformToList, aggregateToList } from "mpd3";
+import { transformToList, aggregateToList } from "@prokosna/mpd3";
 ```
 
 Available utilities:
