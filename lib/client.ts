@@ -1,15 +1,15 @@
 import { EventEmitter } from "node:events";
-import type { Command } from "./command.js";
-import { ConnectionPool } from "./connection.js";
-import { CommandExecutor } from "./executor.js";
-import { EventManager } from "./event.js";
-import type { ReadableStream } from "node:stream/web";
-import type { ResponseLine } from "./types.js";
-import { OK, PACKAGE_NAME } from "./const.js";
-import debugCreator from "debug";
-import { Parsers } from "./parsers.js";
 import type * as net from "node:net";
 import os from "node:os";
+import type { ReadableStream } from "node:stream/web";
+import debugCreator from "debug";
+import type { Command } from "./command.js";
+import { ConnectionPool } from "./connection.js";
+import { OK, PACKAGE_NAME } from "./const.js";
+import { EventManager } from "./event.js";
+import { CommandExecutor } from "./executor.js";
+import { Parsers } from "./parsers.js";
+import type { ResponseLine } from "./types.js";
 
 const debug = debugCreator(`${PACKAGE_NAME}:client`);
 
@@ -22,7 +22,12 @@ export type Config = net.NetConnectOpts & {
 	poolSize?: number;
 	/** Delay in milliseconds before attempting to reconnect. Defaults to 5000. */
 	reconnectDelay?: number;
-	/** Maximum number of reconnection attempts. Defaults to 3. */
+	/**
+	 * Maximum number of *retry* attempts after a failed connection or a
+	 * dropped event-monitoring connection. The initial attempt is not
+	 * counted, so the total number of attempts on the initial connection
+	 * path is `1 + maxRetries`. Defaults to 3.
+	 */
 	maxRetries?: number;
 	/** MPD server password. */
 	password?: string;
@@ -36,19 +41,20 @@ export type Config = net.NetConnectOpts & {
  * @returns The configuration object with defaults applied.
  */
 function applyDefaultValuesIfNotSet(config: Config): Config {
-	if ("path" in config) {
-		if (config.path.startsWith("~")) {
-			config.path = config.path.replace(/^~/, os.homedir());
+	const out: Config = { ...config };
+	if ("path" in out) {
+		if (out.path.startsWith("~")) {
+			out.path = out.path.replace(/^~/, os.homedir());
 		}
 	} else {
-		config.host ??= process.env.MPD_HOST || "localhost";
-		config.port ??= Number(process.env.MPD_PORT) || 6600;
+		out.host ??= process.env.MPD_HOST || "localhost";
+		out.port ??= Number(process.env.MPD_PORT) || 6600;
 	}
-	config.timeout ??= Number(process.env.MPD_TIMEOUT) || 5000;
-	config.poolSize ??= 3;
-	config.reconnectDelay ??= 5000;
-	config.maxRetries ??= 3;
-	return config;
+	out.timeout ??= Number(process.env.MPD_TIMEOUT) || 5000;
+	out.poolSize ??= 3;
+	out.reconnectDelay ??= 5000;
+	out.maxRetries ??= 3;
+	return out;
 }
 
 /**
@@ -61,7 +67,6 @@ export class Client extends EventEmitter {
 	private commandExecutor: CommandExecutor;
 	private eventManager: EventManager;
 	private mpdVersion = "unknown";
-	private totalListeners = 0;
 
 	/**
 	 * Private constructor. Use MpdClient.connect() to create instances.
@@ -73,15 +78,10 @@ export class Client extends EventEmitter {
 		this.commandExecutor = new CommandExecutor(this.connectionPool);
 		this.eventManager = new EventManager(this, this.connectionPool, config);
 
-		this.on("newListener", async (event: string) => {
-			if (!event.includes("system")) {
-				return;
-			}
-			this.totalListeners++;
-			if (this.totalListeners === 1) {
-				await this.eventManager.startMonitoring();
-				debug("Event monitoring started.");
-			}
+		this.on("newListener", (event: string | symbol) => {
+			if (typeof event !== "string") return;
+			if (event !== "system" && !event.startsWith("system-")) return;
+			void this.eventManager.startMonitoring();
 		});
 	}
 
@@ -128,7 +128,6 @@ export class Client extends EventEmitter {
 		}
 
 		debug("All connection attempts failed.");
-		await client.disconnect();
 		throw (
 			lastError ||
 			new Error(

@@ -1,10 +1,10 @@
-import { CommandExecutor } from "../lib/executor";
-import { ConnectionPool } from "../lib/connection";
-import type { Connection } from "../lib/connection";
-import { Command } from "../lib/command";
 import { ReadableStream } from "node:stream/web";
-import type { ResponseLine } from "../lib/types";
 import { beforeEach, describe, expect, it, type Mocked, vi } from "vitest";
+import { Command } from "../lib/command";
+import type { Connection } from "../lib/connection";
+import { ConnectionPool } from "../lib/connection";
+import { CommandExecutor } from "../lib/executor";
+import type { ResponseLine } from "../lib/types";
 
 const mockExecuteCommand =
 	vi.fn<(command: string | Command) => Promise<ReadableStream<ResponseLine>>>();
@@ -28,7 +28,7 @@ const mockEmit = vi.fn();
 
 vi.mock("../lib/connection", () => {
 	return {
-		ConnectionPool: vi.fn().mockImplementation((config) => {
+		ConnectionPool: vi.fn().mockImplementation(function (config) {
 			return {
 				getConnection: mockGetConnection,
 				releaseConnection: mockReleaseConnection,
@@ -128,6 +128,28 @@ describe("CommandQueue Unit Tests", () => {
 			expect(mockReleaseConnection).not.toHaveBeenCalled();
 
 			mockGetConnection.mockResolvedValue(mockConnection);
+		});
+
+		it("should swallow releaseConnection rejection without becoming an unhandled rejection", async () => {
+			const releaseError = new Error(
+				"Attempted to release connection X which is not managed by this pool.",
+			);
+			mockReleaseConnection.mockRejectedValueOnce(releaseError as never);
+
+			const unhandledRejections: unknown[] = [];
+			const onUnhandled = (reason: unknown) => unhandledRejections.push(reason);
+			process.on("unhandledRejection", onUnhandled);
+
+			try {
+				await commandQueue.execute("status");
+				await yieldExecution();
+				await yieldExecution();
+
+				expect(mockReleaseConnection).toHaveBeenCalledTimes(1);
+				expect(unhandledRejections).toHaveLength(0);
+			} finally {
+				process.off("unhandledRejection", onUnhandled);
+			}
 		});
 	});
 });

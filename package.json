@@ -1,16 +1,21 @@
 {
   "name": "mpd3",
-  "version": "1.1.1",
+  "version": "2.0.0",
   "description": "Low level MPD (Music Player Daemon) client with Web Streams API",
-  "main": "./dist/cjs/index.js",
+  "main": "./dist/index.cjs",
   "type": "module",
-  "module": "./dist/esm/index.js",
-  "types": "./dist/cjs/index.d.ts",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
   "exports": {
     ".": {
-      "types": "./dist/cjs/index.d.ts",
-      "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.js"
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
   "files": [
@@ -25,16 +30,19 @@
   ],
   "license": "MIT",
   "scripts": {
-    "build:esm": "tsc --project tsconfig.esm.json",
-    "build:cjs": "tsc --project tsconfig.cjs.json",
-    "build": "npm run build:esm && npm run build:cjs",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
     "prepare": "npm run build",
-    "lint": "biome lint ./lib/*.ts ./__tests__/*.ts --write --unsafe --max-diagnostics none",
-    "fmt": "biome format ./lib/*.ts ./__tests__/*.ts --write",
+    "prepublishOnly": "npm run lint && npm run typecheck && npm run test:unit && npm run build",
+    "lint": "biome check ./lib ./__tests__",
+    "lint:fix": "biome check ./lib ./__tests__ --write",
     "test": "vitest run",
     "test:unit": "vitest run unit",
     "test:int": "vitest run int",
     "test:coverage": "vitest run --coverage"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "repository": {
     "type": "git",
@@ -54,10 +62,11 @@
     "debug": "^4.4.3"
   },
   "devDependencies": {
-    "@biomejs/biome": "1.9.4",
-    "@types/node": "^25.0.2",
-    "@vitest/coverage-v8": "^3.2.4",
-    "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "@biomejs/biome": "2.4.13",
+    "@types/node": "^25.6.0",
+    "@vitest/coverage-v8": "^4.1.5",
+    "tsdown": "^0.21.10",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
   }
 }

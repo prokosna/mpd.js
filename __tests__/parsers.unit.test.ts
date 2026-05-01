@@ -1,13 +1,12 @@
-import { describe, it } from "vitest";
-import { expect } from "vitest";
+import type { TransformStream } from "node:stream/web";
+import { ReadableStream } from "node:stream/web";
+import { describe, expect, it } from "vitest";
 import {
-	Parsers,
 	type ListParserOptions,
 	type ObjectParsingOptions,
+	Parsers,
 } from "../lib/parsers";
 import type { ResponseLine } from "../lib/types";
-import { ReadableStream } from "node:stream/web";
-import type { TransformStream } from "node:stream/web";
 
 // Helper function revised to manually handle TransformStream
 async function testStreamTransformerManual<TInput, TOutput>(

@@ -1,12 +1,12 @@
-import type {
-	ParsedTime,
-	ParsedAudio,
-	MpdTypedObject,
-	ParsedRange,
-	ResponseLine,
-} from "./types.js";
 import debugCreator from "debug";
 import { PACKAGE_NAME } from "./const.js";
+import type {
+	MpdTypedObject,
+	ParsedAudio,
+	ParsedRange,
+	ParsedTime,
+	ResponseLine,
+} from "./types.js";
 
 const debug = debugCreator(`${PACKAGE_NAME}:parserUtils`);
 

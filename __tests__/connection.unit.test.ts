@@ -1,10 +1,10 @@
 import { EventEmitter } from "node:events";
-import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { NetConnectOpts, Socket } from "node:net";
-import { OK, ACK_PREFIX } from "../lib/const";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Connection } from "../lib/connection";
-import { escapeArg } from "../lib/parserUtils";
+import { ACK_PREFIX, OK } from "../lib/const";
 import { MpdError } from "../lib/error";
+import { escapeArg } from "../lib/parserUtils";
 
 // --- Mock Socket Implementation ---
 class SimpleMockSocket extends EventEmitter {
@@ -48,7 +48,7 @@ let lastCreatedSocket: SimpleMockSocket | null = null;
 
 // --- Hoisted Mock ---
 const mocks = vi.hoisted(() => {
-	const mockCreateConnectionFn = (config: NetConnectOpts): Socket => {
+	const mockCreateConnectionFn = (_config: NetConnectOpts): Socket => {
 		const socket = new SimpleMockSocket();
 		lastCreatedSocket = socket;
 		process.nextTick(() => socket.emit("connect"));

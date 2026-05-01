@@ -1,8 +1,8 @@
 import { EventEmitter } from "node:events";
-import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { NetConnectOpts, Socket } from "node:net";
-import { OK } from "../lib/const";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectionPool } from "../lib/connection";
+import { OK } from "../lib/const";
 
 class SimpleMockSocket extends EventEmitter {
 	destroyed = false;
@@ -59,7 +59,7 @@ let createdSockets: SimpleMockSocket[] = [];
 let shouldFailNextConnection = false;
 
 const mocks = vi.hoisted(() => {
-	const mockCreateConnectionFn = (config: NetConnectOpts): Socket => {
+	const mockCreateConnectionFn = (_config: NetConnectOpts): Socket => {
 		const socket = new SimpleMockSocket();
 		createdSockets.push(socket);
 
@@ -246,6 +246,45 @@ describe("ConnectionPool - MPD Process Death and Recovery", () => {
 		const recoveredConnection = await recoveryGetConnection;
 		expect(recoveredConnection).toBeDefined();
 		expect(recoveredConnection.getMpdVersion()).toBe("0.23.5");
+
+		await pool.disconnectAll();
+		vi.useRealTimers();
+	});
+
+	it("should keep the pool's close listener attached after executeCommand completes", async () => {
+		vi.useFakeTimers();
+		const pool = new ConnectionPool({
+			host: "localhost",
+			port: 6600,
+			timeout: 100,
+			poolSize: 3,
+		});
+
+		shouldFailNextConnection = false;
+		const getConnectionPromise = pool.getConnection();
+		await vi.advanceTimersByTimeAsync(10);
+
+		const socket = createdSockets[createdSockets.length - 1];
+		socket.simulateData(`${OK} MPD 0.23.5\n`);
+
+		const connection = await getConnectionPromise;
+		expect(connection).toBeDefined();
+
+		const baselineCloseListeners = socket.listenerCount("close");
+		expect(baselineCloseListeners).toBeGreaterThanOrEqual(1);
+
+		const stream = connection.executeCommand("status");
+		expect(socket.listenerCount("close")).toBe(baselineCloseListeners + 1);
+
+		socket.simulateData(`state: play\n${OK}\n`);
+
+		const reader = stream.getReader();
+		while (true) {
+			const { done } = await reader.read();
+			if (done) break;
+		}
+
+		expect(socket.listenerCount("close")).toBe(baselineCloseListeners);
 
 		await pool.disconnectAll();
 		vi.useRealTimers();

@@ -2,16 +2,14 @@
   "compilerOptions": {
     "target": "ESNext",
     "module": "NodeNext",
-    "declaration": true,
-    "sourceMap": true,
-    "rootDir": "./lib",
-    "outDir": "./dist",
+    "moduleResolution": "nodenext",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": false,
     "skipLibCheck": true,
-    "moduleResolution": "nodenext",
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "noEmit": true
   },
   "include": ["lib/*.ts"],
   "exclude": ["node_modules", "dist"]

@@ -1,22 +1,22 @@
+import { randomUUID } from "node:crypto";
+import { EventEmitter } from "node:events";
 import type { Socket } from "node:net";
 import { createConnection } from "node:net";
 import { ReadableStream } from "node:stream/web";
 import { StringDecoder } from "node:string_decoder";
-import type { Command } from "./command.js";
+import debugCreator from "debug";
 import type { Config } from "./client.js";
-import { MpdError } from "./error.js";
+import type { Command } from "./command.js";
 import {
 	ACK_PREFIX,
 	BINARY_HEADER_REGEX,
+	EVENT_CONNECTION_AVAILABLE,
 	OK,
 	PACKAGE_NAME,
-	EVENT_CONNECTION_AVAILABLE,
 } from "./const.js";
-import debugCreator from "debug";
-import type { ResponseLine } from "./types.js";
-import { EventEmitter } from "node:events";
+import { MpdError } from "./error.js";
 import { escapeArg } from "./parserUtils.js";
-import { randomUUID } from "node:crypto";
+import type { ResponseLine } from "./types.js";
 
 const debug = debugCreator(`${PACKAGE_NAME}:connection`);
 
@@ -104,7 +104,7 @@ export class Connection extends EventEmitter {
 				reject(err);
 			});
 
-			socket.once("close", (hadError) => {
+			socket.once("close", (_hadError) => {
 				clearTimeout(timer);
 				reject(new Error("Connection closed before MPD welcome message."));
 			});
@@ -126,7 +126,7 @@ export class Connection extends EventEmitter {
 				resolve();
 			});
 			this.socket.once("error", (err) => {
-				console.error(`Error during socket disconnection: ${err}`);
+				debug("Error during socket disconnection: %o", err);
 			});
 			this.socket.end();
 		});
@@ -144,20 +144,7 @@ export class Connection extends EventEmitter {
 		let buffer = "";
 		const decoder = new StringDecoder("utf8");
 		let isCleanedUp = false;
-
-		const cleanupListeners = () => {
-			if (isCleanedUp) return;
-			isCleanedUp = true;
-			this.socket.removeAllListeners("data");
-			this.socket.removeAllListeners("error");
-			this.socket.removeAllListeners("close");
-			const remaining = decoder.end();
-			if (remaining) {
-				debug("StringDecoder flushed remaining bytes during cleanup");
-			}
-			this.isExecutingCommand = false;
-			this.emit(this.COMMAND_EXECUTION_FINISHED);
-		};
+		let cleanupListeners!: () => void;
 
 		const stream = new ReadableStream<ResponseLine>({
 			start: (controller) => {
@@ -167,7 +154,7 @@ export class Connection extends EventEmitter {
 				let expectedBinaryBytes = 0;
 				let receivedBinaryBytes = 0;
 				let binaryBufferAccumulator: Buffer[] = [];
-				let pendingBinaryLine: ResponseLine | undefined = undefined;
+				let pendingBinaryLine: ResponseLine | undefined;
 
 				const enqueueRegularTextLine = (rawLine: string) => {
 					const line: ResponseLine = { raw: rawLine };
@@ -211,8 +198,8 @@ export class Connection extends EventEmitter {
 									);
 									controller.enqueue(pendingBinaryLine);
 								} else {
-									console.error(
-										"Error: pendingBinaryLine was null when binary data finished.",
+									debug(
+										"Internal error: pendingBinaryLine was missing when binary data finished.",
 									);
 								}
 
@@ -247,7 +234,7 @@ export class Connection extends EventEmitter {
 											pendingBinaryLine.binaryData = Buffer.alloc(0);
 											controller.enqueue(pendingBinaryLine);
 											debug("Received zero-length binary data.");
-											pendingBinaryLine = null;
+											pendingBinaryLine = undefined;
 										} else {
 											// Switch to binary mode
 											mode = "binary";
@@ -257,7 +244,7 @@ export class Connection extends EventEmitter {
 											break;
 										}
 									} else {
-										console.warn(`Invalid binary length in line: ${rawLine}`);
+										debug("Invalid binary length in line: %s", rawLine);
 										enqueueRegularTextLine(rawLine);
 									}
 								} else {
@@ -292,7 +279,19 @@ export class Connection extends EventEmitter {
 					cleanupListeners();
 				};
 
-				// Attach listeners
+				cleanupListeners = () => {
+					if (isCleanedUp) return;
+					isCleanedUp = true;
+					this.socket.off("data", dataListener);
+					this.socket.off("error", errorListener);
+					this.socket.off("close", closeListener);
+					if (decoder.end()) {
+						debug("StringDecoder flushed remaining bytes during cleanup");
+					}
+					this.isExecutingCommand = false;
+					this.emit(this.COMMAND_EXECUTION_FINISHED);
+				};
+
 				this.socket.on("data", dataListener);
 				this.socket.on("error", errorListener);
 				this.socket.on("close", closeListener);
@@ -318,7 +317,7 @@ export class Connection extends EventEmitter {
 	/**
 	 * Executes a list of MPD commands atomically using command_list_ok_begin/end.
 	 * @param commands - An array of command strings or Command objects.
-	 * @returns A ReadableStream that yields response lines for the entire list.
+	 * @returns A ReadableStream that yields response lines for the entire list, including list_OK.
 	 */
 	executeCommands(
 		commands: (string | Command)[],
@@ -458,18 +457,19 @@ export class ConnectionPool extends EventEmitter {
 			([key, connection]) => {
 				this.connectionPromises.delete(key);
 				return connection.disconnect().catch((error) => {
-					console.error(`Error disconnecting connection: ${error}`);
+					debug("Error disconnecting connection: %o", error);
 				});
 			},
 		);
 		for (const [key, connectionPromise] of this.connectionPromises) {
-			console.warn(
-				`Connection ${key} is still being created when disconnectAll was called.`,
+			debug(
+				"Connection %s is still being created when disconnectAll was called.",
+				key,
 			);
 			disconnectPromises.push(
 				connectionPromise.then((connection) =>
 					connection.disconnect().catch((error) => {
-						console.error(`Error disconnecting connection: ${error}`);
+						debug("Error disconnecting connection: %o", error);
 					}),
 				),
 			);
@@ -490,7 +490,7 @@ export class ConnectionPool extends EventEmitter {
 		try {
 			return Connection.connect(this.config, id);
 		} catch (error) {
-			console.error("Failed to create dedicated connection:", error);
+			debug("Failed to create dedicated connection: %o", error);
 			throw error;
 		}
 	}
@@ -533,7 +533,7 @@ export class ConnectionPool extends EventEmitter {
 					newConnection.setBusy(true);
 					// Add a listener to remove connection from pool if it closes unexpectedly
 					newConnection.socket.once("close", () => {
-						console.warn("Connection closed unexpectedly, removing from pool.");
+						debug("Connection closed unexpectedly, removing from pool.");
 						this.connectionPromises.delete(id);
 						this.connections.delete(id);
 					});

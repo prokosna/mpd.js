@@ -1,8 +1,9 @@
 import { EventEmitter } from "node:events";
-import type { Connection, ConnectionPool } from "./connection.js";
-import type { Config } from "./client.js";
-import { ACK_PREFIX, CHANGED_EVENT_PREFIX, OK, PACKAGE_NAME } from "./const.js";
+import { StringDecoder } from "node:string_decoder";
 import debugCreator from "debug";
+import type { Config } from "./client.js";
+import type { Connection, ConnectionPool } from "./connection.js";
+import { ACK_PREFIX, CHANGED_EVENT_PREFIX, OK, PACKAGE_NAME } from "./const.js";
 import { MpdError } from "./error.js";
 
 const debug = debugCreator(`${PACKAGE_NAME}:event`);
@@ -22,6 +23,7 @@ export class EventManager extends EventEmitter {
 	private reconnectAttempts = 0;
 	private reconnectTimer?: NodeJS.Timeout;
 	private isReconnecting = false;
+	private inFlightStart?: Promise<string | undefined>;
 
 	/**
 	 * Creates an instance of EventManager.
@@ -44,39 +46,51 @@ export class EventManager extends EventEmitter {
 
 	/**
 	 * Establishes a dedicated connection for monitoring MPD events and starts idling.
-	 * Returns the MPD version upon successful connection.
-	 * Rejects if monitoring is already active or fails to establish a connection.
-	 * @returns A promise that resolves with the MPD version string.
+	 * Concurrent callers share the in-flight attempt and resolve to the same value.
+	 * On failure, emits an `error` event on the client emitter and resolves to
+	 * `undefined` (does not reject), so callers do not need to attach a `.catch`.
+	 * @returns A promise that resolves with the MPD version string on success,
+	 *   or `undefined` on failure.
 	 */
-	async startMonitoring(): Promise<string> {
+	async startMonitoring(): Promise<string | undefined> {
 		if (this.connection !== undefined) {
 			debug("Event monitoring is already active.");
 			return this.connection.getMpdVersion();
 		}
+		if (this.inFlightStart) {
+			return this.inFlightStart;
+		}
 
 		debug("Starting event monitoring...");
-		try {
-			this.connection = await this.connectionPool.createDedicatedConnection();
-			this.setupConnectionListeners();
-			this.startIdling();
-			this.isMonitoring = true;
-
-			return this.connection.getMpdVersion();
-		} catch (error) {
-			debug("Failed to start event monitoring:", error);
-			if (this.connection !== undefined) {
-				await this.connection
-					.disconnect()
-					.catch((e) =>
-						debug("Error disconnecting after failed monitoring start:", e),
-					);
-				this.connection = undefined;
+		this.inFlightStart = (async (): Promise<string | undefined> => {
+			try {
+				this.connection = await this.connectionPool.createDedicatedConnection();
+				this.setupConnectionListeners();
+				this.startIdling();
+				this.isMonitoring = true;
+				return this.connection.getMpdVersion();
+			} catch (error) {
+				debug("Failed to start event monitoring:", error);
+				if (this.connection !== undefined) {
+					await this.connection
+						.disconnect()
+						.catch((e) =>
+							debug("Error disconnecting after failed monitoring start:", e),
+						);
+					this.connection = undefined;
+				}
+				this.emitter.emit(
+					"error",
+					new Error(`Failed to start monitoring: ${error.message}`),
+				);
+				return undefined;
 			}
-			this.emitter.emit(
-				"error",
-				new Error(`Failed to start monitoring: ${error.message}`),
-			);
-			throw error;
+		})();
+
+		try {
+			return await this.inFlightStart;
+		} finally {
+			this.inFlightStart = undefined;
 		}
 	}
 
@@ -188,52 +202,50 @@ export class EventManager extends EventEmitter {
 					new Error(`Failed to send noidle command: ${err.message}`),
 				);
 			}
-			this.idling = false;
 		});
 		this.idling = false;
 	}
 
 	/**
-	 * Handles incoming data chunks on the dedicated event connection.
-	 * Parses lines, emits 'system-<subsystem>' events for 'changed:' lines,
-	 * handles 'OK' to re-enter idle state, and handles 'ACK' errors.
-	 * @param data - The data chunk received from the socket.
+	 * Handles a single line received on the dedicated event connection.
+	 * Emits 'system-<subsystem>' events for 'changed:' lines, handles 'OK'
+	 * to re-enter idle state, and handles 'ACK' errors.
+	 * Lines are buffered and split on '\n' boundaries by setupConnectionListeners
+	 * before reaching this method, since TCP data events do not align with
+	 * line boundaries.
+	 * @param line - A single complete line (without trailing newline).
 	 * @private
 	 */
-	private handleEventData(data: string): void {
-		const lines = data.toString().split("\n");
-
-		for (const line of lines) {
-			if (line.startsWith(CHANGED_EVENT_PREFIX)) {
-				const subsystem = line.substring(CHANGED_EVENT_PREFIX.length).trim();
-				if (subsystem) {
-					debug(`Emitting event: system-${subsystem}`);
-					this.emitter.emit(`system-${subsystem}`);
-					this.emitter.emit("system", subsystem);
-				}
-			} else if (line === OK) {
-				this.idling = false;
-				if (this.isMonitoring) {
-					debug("Restarting idling...");
-					this.startIdling();
-				} else {
-					debug("Monitoring is stopped, not restarting idle.");
-				}
-			} else if (line.startsWith(ACK_PREFIX)) {
-				this.idling = false;
-				debug("Received ACK during idle: %s", line);
-				this.emitter.emit(
-					"error",
-					new MpdError(line, "Error received during idle"),
-				);
-				// Attempt to restart idling if monitoring is still active
-				if (this.isMonitoring) {
-					debug("Attempting to restart idling after ACK...");
-					this.startIdling();
-				}
-			} else if (line) {
-				debug("Received unexpected line on event connection:", line);
+	private handleEventLine(line: string): void {
+		if (line.startsWith(CHANGED_EVENT_PREFIX)) {
+			const subsystem = line.substring(CHANGED_EVENT_PREFIX.length).trim();
+			if (subsystem) {
+				debug(`Emitting event: system-${subsystem}`);
+				this.emitter.emit(`system-${subsystem}`);
+				this.emitter.emit("system", subsystem);
 			}
+		} else if (line === OK) {
+			this.idling = false;
+			if (this.isMonitoring) {
+				debug("Restarting idling...");
+				this.startIdling();
+			} else {
+				debug("Monitoring is stopped, not restarting idle.");
+			}
+		} else if (line.startsWith(ACK_PREFIX)) {
+			this.idling = false;
+			debug("Received ACK during idle: %s", line);
+			this.emitter.emit(
+				"error",
+				new MpdError(line, "Error received during idle"),
+			);
+			// Attempt to restart idling if monitoring is still active
+			if (this.isMonitoring) {
+				debug("Attempting to restart idling after ACK...");
+				this.startIdling();
+			}
+		} else if (line) {
+			debug("Received unexpected line on event connection:", line);
 		}
 	}
 
@@ -242,8 +254,18 @@ export class EventManager extends EventEmitter {
 			return;
 		}
 
+		let buffer = "";
+		const decoder = new StringDecoder("utf8");
+
 		this.connection.socket.on("data", (data: Buffer) => {
-			this.handleEventData(data.toString("utf8"));
+			buffer += decoder.write(data);
+			let newlineIndex = buffer.indexOf("\n");
+			while (newlineIndex !== -1) {
+				const line = buffer.substring(0, newlineIndex);
+				buffer = buffer.substring(newlineIndex + 1);
+				this.handleEventLine(line);
+				newlineIndex = buffer.indexOf("\n");
+			}
 		});
 
 		this.connection.socket.on("close", (hadError: boolean) => {

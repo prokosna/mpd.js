@@ -1,8 +1,8 @@
 import type { ReadableStream } from "node:stream/web";
-import type { Command } from "./command.js";
-import type { ConnectionPool, Connection } from "./connection.js";
-import { PACKAGE_NAME } from "./const.js";
 import debugCreator from "debug";
+import type { Command } from "./command.js";
+import type { Connection, ConnectionPool } from "./connection.js";
+import { PACKAGE_NAME } from "./const.js";
 import type { ResponseLine } from "./types.js";
 
 const debug = debugCreator(`${PACKAGE_NAME}:executor`);
@@ -64,7 +64,7 @@ export class CommandExecutor {
 	 * Processes a single item.
 	 */
 	private async processItem(item: CommandItem): Promise<void> {
-		let connection: Connection | undefined = undefined;
+		let connection: Connection | undefined;
 		try {
 			connection = await this.connectionPool.getConnection();
 
@@ -80,7 +80,11 @@ export class CommandExecutor {
 			item.reject(error);
 		} finally {
 			if (connection) {
-				this.connectionPool.releaseConnection(connection);
+				try {
+					await this.connectionPool.releaseConnection(connection);
+				} catch (error) {
+					debug(`Error releasing connection: ${error.message}`);
+				}
 			}
 			debug("Finished command processing.");
 		}

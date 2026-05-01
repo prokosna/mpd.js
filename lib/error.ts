@@ -54,23 +54,28 @@ export class MpdError extends Error {
 		// error response:
 		// ACK [error@command_listNum] {current_command} message_text
 
-		// parse error and command_listNum
 		const errCode = str.match(/\[(.*?)\]/);
 		this.name = "MPDError";
 
-		if (!errCode || !errCode.length) {
+		if (!errCode) {
 			this.message = str;
 			this.code = code || str;
 		} else {
 			const [error, cmdListNum] = errCode[1].split("@");
 			const currentCommand = str.match(/{(.*?)}/);
-			const msg = str.split("}")[1].trim();
+			const closeBraceIdx = str.indexOf("}");
+			const msg =
+				closeBraceIdx >= 0 ? str.substring(closeBraceIdx + 1).trim() : str;
 
 			this.code = CODES_REVERSED[error] || "??";
 			this.errno = Number(error) | 0;
 			this.message = msg;
-			this.cmd_list_num = Number(cmdListNum) | 0;
-			this.current_command = currentCommand[1];
+			if (cmdListNum !== undefined) {
+				this.cmd_list_num = Number(cmdListNum) | 0;
+			}
+			if (currentCommand) {
+				this.current_command = currentCommand[1];
+			}
 		}
 
 		if (info) {

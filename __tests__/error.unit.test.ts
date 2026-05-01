@@ -1,5 +1,5 @@
-import { describe, test, expect } from "vitest";
-import { MpdError, isError } from "../lib/error";
+import { describe, expect, test } from "vitest";
+import { isError, MpdError } from "../lib/error";
 
 describe("MPDError", () => {
 	test("should create error with code and message", () => {
@@ -24,6 +24,33 @@ describe("MPDError", () => {
 		const error = new MpdError("invalid error");
 		expect(error.code).toBe("invalid error");
 		expect(error.message).toBe("invalid error");
+		expect(error.errno).toBeUndefined();
+		expect(error.cmd_list_num).toBeUndefined();
+		expect(error.current_command).toBeUndefined();
+	});
+
+	test("should handle ACK with brackets but no braces", () => {
+		const error = new MpdError("ACK [5@0] some message without braces");
+		expect(error.code).toBe("UNKNOWN");
+		expect(error.errno).toBe(5);
+		expect(error.cmd_list_num).toBe(0);
+		expect(error.current_command).toBeUndefined();
+		expect(error.message).toBe("ACK [5@0] some message without braces");
+	});
+
+	test("should handle ACK with brackets but no @ separator", () => {
+		const error = new MpdError("ACK [5] {test} message");
+		expect(error.code).toBe("UNKNOWN");
+		expect(error.errno).toBe(5);
+		expect(error.cmd_list_num).toBeUndefined();
+		expect(error.current_command).toBe("test");
+		expect(error.message).toBe("message");
+	});
+
+	test("should handle bare 'ACK' with no usable parts", () => {
+		const error = new MpdError("ACK");
+		expect(error.code).toBe("ACK");
+		expect(error.message).toBe("ACK");
 		expect(error.errno).toBeUndefined();
 		expect(error.cmd_list_num).toBeUndefined();
 		expect(error.current_command).toBeUndefined();
