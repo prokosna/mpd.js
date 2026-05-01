@@ -234,7 +234,7 @@ export class Connection extends EventEmitter {
 											pendingBinaryLine.binaryData = Buffer.alloc(0);
 											controller.enqueue(pendingBinaryLine);
 											debug("Received zero-length binary data.");
-											pendingBinaryLine = null;
+											pendingBinaryLine = undefined;
 										} else {
 											// Switch to binary mode
 											mode = "binary";
