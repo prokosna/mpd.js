@@ -126,7 +126,7 @@ export class Connection extends EventEmitter {
 				resolve();
 			});
 			this.socket.once("error", (err) => {
-				console.error(`Error during socket disconnection: ${err}`);
+				debug("Error during socket disconnection: %o", err);
 			});
 			this.socket.end();
 		});
@@ -198,8 +198,8 @@ export class Connection extends EventEmitter {
 									);
 									controller.enqueue(pendingBinaryLine);
 								} else {
-									console.error(
-										"Error: pendingBinaryLine was null when binary data finished.",
+									debug(
+										"Internal error: pendingBinaryLine was missing when binary data finished.",
 									);
 								}
 
@@ -244,7 +244,7 @@ export class Connection extends EventEmitter {
 											break;
 										}
 									} else {
-										console.warn(`Invalid binary length in line: ${rawLine}`);
+										debug("Invalid binary length in line: %s", rawLine);
 										enqueueRegularTextLine(rawLine);
 									}
 								} else {
@@ -457,18 +457,19 @@ export class ConnectionPool extends EventEmitter {
 			([key, connection]) => {
 				this.connectionPromises.delete(key);
 				return connection.disconnect().catch((error) => {
-					console.error(`Error disconnecting connection: ${error}`);
+					debug("Error disconnecting connection: %o", error);
 				});
 			},
 		);
 		for (const [key, connectionPromise] of this.connectionPromises) {
-			console.warn(
-				`Connection ${key} is still being created when disconnectAll was called.`,
+			debug(
+				"Connection %s is still being created when disconnectAll was called.",
+				key,
 			);
 			disconnectPromises.push(
 				connectionPromise.then((connection) =>
 					connection.disconnect().catch((error) => {
-						console.error(`Error disconnecting connection: ${error}`);
+						debug("Error disconnecting connection: %o", error);
 					}),
 				),
 			);
@@ -489,7 +490,7 @@ export class ConnectionPool extends EventEmitter {
 		try {
 			return Connection.connect(this.config, id);
 		} catch (error) {
-			console.error("Failed to create dedicated connection:", error);
+			debug("Failed to create dedicated connection: %o", error);
 			throw error;
 		}
 	}
@@ -532,7 +533,7 @@ export class ConnectionPool extends EventEmitter {
 					newConnection.setBusy(true);
 					// Add a listener to remove connection from pool if it closes unexpectedly
 					newConnection.socket.once("close", () => {
-						console.warn("Connection closed unexpectedly, removing from pool.");
+						debug("Connection closed unexpectedly, removing from pool.");
 						this.connectionPromises.delete(id);
 						this.connections.delete(id);
 					});
