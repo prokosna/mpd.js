@@ -28,6 +28,33 @@ describe("MPDError", () => {
 		expect(error.cmd_list_num).toBeUndefined();
 		expect(error.current_command).toBeUndefined();
 	});
+
+	test("should handle ACK with brackets but no braces", () => {
+		const error = new MpdError("ACK [5@0] some message without braces");
+		expect(error.code).toBe("UNKNOWN");
+		expect(error.errno).toBe(5);
+		expect(error.cmd_list_num).toBe(0);
+		expect(error.current_command).toBeUndefined();
+		expect(error.message).toBe("ACK [5@0] some message without braces");
+	});
+
+	test("should handle ACK with brackets but no @ separator", () => {
+		const error = new MpdError("ACK [5] {test} message");
+		expect(error.code).toBe("UNKNOWN");
+		expect(error.errno).toBe(5);
+		expect(error.cmd_list_num).toBeUndefined();
+		expect(error.current_command).toBe("test");
+		expect(error.message).toBe("message");
+	});
+
+	test("should handle bare 'ACK' with no usable parts", () => {
+		const error = new MpdError("ACK");
+		expect(error.code).toBe("ACK");
+		expect(error.message).toBe("ACK");
+		expect(error.errno).toBeUndefined();
+		expect(error.cmd_list_num).toBeUndefined();
+		expect(error.current_command).toBeUndefined();
+	});
 });
 
 describe("isError", () => {
