@@ -28,15 +28,22 @@ export class Connection extends EventEmitter {
 	private readonly id: string;
 	readonly socket: Socket;
 	private readonly mpdVersion: string;
+	private readonly commandTimeout: number;
 	private busy: boolean;
 	private isExecutingCommand: boolean;
 	private readonly COMMAND_EXECUTION_FINISHED = "COMMAND_EXECUTION_FINISHED";
 
-	private constructor(id: string, socket: Socket, mpdVersion: string) {
+	private constructor(
+		id: string,
+		socket: Socket,
+		mpdVersion: string,
+		commandTimeout: number,
+	) {
 		super();
 		this.id = id;
 		this.socket = socket;
 		this.mpdVersion = mpdVersion;
+		this.commandTimeout = commandTimeout;
 		this.busy = false;
 		this.isExecutingCommand = false;
 	}
@@ -77,7 +84,14 @@ export class Connection extends EventEmitter {
 							if (message2.startsWith(OK)) {
 								socket.removeAllListeners("error");
 								socket.removeAllListeners("close");
-								resolve(new Connection(id, socket, version));
+								resolve(
+									new Connection(
+										id,
+										socket,
+										version,
+										config.commandTimeout ?? 0,
+									),
+								);
 								return;
 							}
 							socket.destroy(
@@ -91,7 +105,9 @@ export class Connection extends EventEmitter {
 					// No password
 					socket.removeAllListeners("error");
 					socket.removeAllListeners("close");
-					resolve(new Connection(id, socket, version));
+					resolve(
+						new Connection(id, socket, version, config.commandTimeout ?? 0),
+					);
 				} else {
 					socket.destroy(
 						new Error(`Unexpected response from server: ${message}`),
@@ -145,6 +161,20 @@ export class Connection extends EventEmitter {
 		const decoder = new StringDecoder("utf8");
 		let isCleanedUp = false;
 		let cleanupListeners!: () => void;
+		let responseTimer: NodeJS.Timeout | undefined;
+		// A peer that vanished without FIN/RST leaves the socket open forever;
+		// destroying it on silence is the only way the pool can recover.
+		const armResponseTimer = () => {
+			if (this.commandTimeout <= 0) return;
+			clearTimeout(responseTimer);
+			responseTimer = setTimeout(() => {
+				this.socket.destroy(
+					new Error(
+						`No response from MPD within ${this.commandTimeout}ms; connection closed`,
+					),
+				);
+			}, this.commandTimeout);
+		};
 
 		const stream = new ReadableStream<ResponseLine>({
 			start: (controller) => {
@@ -175,6 +205,7 @@ export class Connection extends EventEmitter {
 
 				const dataListener = (data: Buffer) => {
 					if (isCleanedUp) return;
+					armResponseTimer();
 
 					let remainingChunk = data;
 
@@ -282,6 +313,7 @@ export class Connection extends EventEmitter {
 				cleanupListeners = () => {
 					if (isCleanedUp) return;
 					isCleanedUp = true;
+					clearTimeout(responseTimer);
 					this.socket.off("data", dataListener);
 					this.socket.off("error", errorListener);
 					this.socket.off("close", closeListener);
@@ -296,7 +328,7 @@ export class Connection extends EventEmitter {
 				this.socket.on("error", errorListener);
 				this.socket.on("close", closeListener);
 
-				// Send command
+				armResponseTimer();
 				this.socket.write(commandStr, "utf8", (err) => {
 					if (err) {
 						debug(`Error writing command to socket: ${err.message}`);
@@ -536,6 +568,8 @@ export class ConnectionPool extends EventEmitter {
 						debug("Connection closed unexpectedly, removing from pool.");
 						this.connectionPromises.delete(id);
 						this.connections.delete(id);
+						// The freed slot must reach callers parked in waitingResolvers.
+						this.emit(EVENT_CONNECTION_AVAILABLE);
 					});
 					debug(
 						`New connection created (pool size ${this.connections.size}/${this.config.poolSize}).`,

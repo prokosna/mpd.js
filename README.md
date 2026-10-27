@@ -135,6 +135,9 @@ Establishes connection(s) to the MPD server and returns a connected `Client` ins
 - `poolSize` (number): Maximum number of connections in the pool (default: `3`).
 - `reconnectDelay` (number): Delay in milliseconds between reconnection attempts (default: `5000`).
 - `maxRetries` (number): Maximum number of *retry* attempts after a failed connection or a dropped event-monitoring connection. The initial connection attempt is not counted as a retry, so the total number of attempts on the initial path is `1 + maxRetries`. Used for both initial connection and event monitoring reconnection (default: `3`).
+- `commandTimeout` (number): Milliseconds a command may wait without receiving any data before its connection is destroyed and the command rejected. Also bounds the reply to an event-connection heartbeat. `0` disables it (default: `30000`).
+- `heartbeatInterval` (number): Interval in milliseconds at which the idle event connection is probed with `noidle` (default: `30000`). `0` disables it.
+- `keepAlive` / `keepAliveInitialDelay`: Standard `net` options; TCP keepalive is enabled with a `10000` ms initial delay by default.
 
 **Reconnection Behavior:**
 
@@ -142,6 +145,7 @@ The client implements automatic reconnection in two scenarios:
 
 1. **Initial Connection**: If the first attempt of `Client.connect()` fails, it will retry up to `maxRetries` more times with `reconnectDelay` between each attempt. With the default `maxRetries: 3`, this means up to 4 total attempts before rejecting.
 2. **Event Monitoring**: If the event monitoring connection drops (used for system events), the client automatically attempts to reconnect up to `maxRetries` times. System events will continue to be emitted after successful reconnection. A `close` event is only emitted after all reconnection attempts have been exhausted.
+3. **Unresponsive Server**: A server that disappears without closing its sockets (host power loss, network path change) is detected instead of hanging forever. A command that receives no data for `commandTimeout` rejects and its connection is replaced on the next command, and a failed heartbeat closes the event connection, which then follows the reconnection path in (2).
 
 ### `client.sendCommand(command: string | Command): Promise<string>`
 

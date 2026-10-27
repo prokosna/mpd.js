@@ -31,6 +31,17 @@ export type Config = net.NetConnectOpts & {
 	maxRetries?: number;
 	/** MPD server password. */
 	password?: string;
+	/**
+	 * Milliseconds a command may wait without receiving any data before its
+	 * connection is considered dead and destroyed. Also bounds the reply to
+	 * an event-connection heartbeat. `0` disables it. Defaults to 30000.
+	 */
+	commandTimeout?: number;
+	/**
+	 * Interval in milliseconds at which the idle event connection is probed
+	 * with `noidle`. `0` disables it. Defaults to 30000.
+	 */
+	heartbeatInterval?: number;
 };
 
 /**
@@ -54,6 +65,10 @@ function applyDefaultValuesIfNotSet(config: Config): Config {
 	out.poolSize ??= 3;
 	out.reconnectDelay ??= 5000;
 	out.maxRetries ??= 3;
+	out.commandTimeout ??= 30000;
+	out.heartbeatInterval ??= 30000;
+	out.keepAlive ??= true;
+	out.keepAliveInitialDelay ??= 10000;
 	return out;
 }
 

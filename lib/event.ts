@@ -24,6 +24,8 @@ export class EventManager extends EventEmitter {
 	private reconnectTimer?: NodeJS.Timeout;
 	private isReconnecting = false;
 	private inFlightStart?: Promise<string | undefined>;
+	private heartbeatTimer?: NodeJS.Timeout;
+	private heartbeatDeadline?: NodeJS.Timeout;
 
 	/**
 	 * Creates an instance of EventManager.
@@ -67,6 +69,7 @@ export class EventManager extends EventEmitter {
 				this.connection = await this.connectionPool.createDedicatedConnection();
 				this.setupConnectionListeners();
 				this.startIdling();
+				this.startHeartbeat();
 				this.isMonitoring = true;
 				return this.connection.getMpdVersion();
 			} catch (error) {
@@ -113,6 +116,7 @@ export class EventManager extends EventEmitter {
 			clearTimeout(this.reconnectTimer);
 			this.reconnectTimer = undefined;
 		}
+		this.stopHeartbeat();
 
 		if (!this.connection) {
 			return;
@@ -225,6 +229,7 @@ export class EventManager extends EventEmitter {
 				this.emitter.emit("system", subsystem);
 			}
 		} else if (line === OK) {
+			this.clearHeartbeatDeadline();
 			this.idling = false;
 			if (this.isMonitoring) {
 				debug("Restarting idling...");
@@ -233,6 +238,7 @@ export class EventManager extends EventEmitter {
 				debug("Monitoring is stopped, not restarting idle.");
 			}
 		} else if (line.startsWith(ACK_PREFIX)) {
+			this.clearHeartbeatDeadline();
 			this.idling = false;
 			debug("Received ACK during idle: %s", line);
 			this.emitter.emit(
@@ -270,6 +276,7 @@ export class EventManager extends EventEmitter {
 
 		this.connection.socket.on("close", (hadError: boolean) => {
 			debug(`Event connection closed${hadError ? " with error" : ""}.`);
+			this.stopHeartbeat();
 			this.connection?.socket?.removeAllListeners();
 			this.connection = undefined;
 			this.idling = false;
@@ -290,6 +297,61 @@ export class EventManager extends EventEmitter {
 			debug("Event connection error:", err);
 			this.emitter.emit("error", err);
 		});
+	}
+
+	/**
+	 * Periodically interrupts the idle with `noidle` and expects MPD's `OK`.
+	 * An idling connection is silent by design, so without this a peer that
+	 * vanished without FIN/RST would never be noticed.
+	 * @private
+	 */
+	private startHeartbeat(): void {
+		this.stopHeartbeat();
+		const interval = this.config.heartbeatInterval ?? 0;
+		if (interval <= 0) {
+			return;
+		}
+		this.heartbeatTimer = setInterval(() => this.sendHeartbeat(), interval);
+	}
+
+	private sendHeartbeat(): void {
+		const connection = this.connection;
+		if (
+			connection === undefined ||
+			!this.idling ||
+			this.heartbeatDeadline !== undefined
+		) {
+			return;
+		}
+		const timeout = this.config.commandTimeout ?? 0;
+		if (timeout > 0) {
+			this.heartbeatDeadline = setTimeout(() => {
+				this.heartbeatDeadline = undefined;
+				debug("Event connection heartbeat timed out.");
+				connection.socket.destroy(
+					new Error(
+						`Event connection heartbeat got no reply within ${timeout}ms`,
+					),
+				);
+			}, timeout);
+		}
+		debug("Sending heartbeat...");
+		this.stopIdling();
+	}
+
+	private clearHeartbeatDeadline(): void {
+		if (this.heartbeatDeadline) {
+			clearTimeout(this.heartbeatDeadline);
+			this.heartbeatDeadline = undefined;
+		}
+	}
+
+	private stopHeartbeat(): void {
+		if (this.heartbeatTimer) {
+			clearInterval(this.heartbeatTimer);
+			this.heartbeatTimer = undefined;
+		}
+		this.clearHeartbeatDeadline();
 	}
 
 	private attemptReconnect(): void {
@@ -321,6 +383,7 @@ export class EventManager extends EventEmitter {
 				this.connection = await this.connectionPool.createDedicatedConnection();
 				this.setupConnectionListeners();
 				this.startIdling();
+				this.startHeartbeat();
 				this.reconnectAttempts = 0;
 				this.isReconnecting = false;
 				debug("Successfully reconnected event connection.");
