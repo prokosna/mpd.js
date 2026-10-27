@@ -10,6 +10,11 @@ class MockSocket extends EventEmitter {
 		return true;
 	});
 	end = vi.fn();
+	destroy = vi.fn((err?: Error) => {
+		this.destroyed = true;
+		if (err) this.emit("error", err);
+		this.emit("close", err !== undefined);
+	});
 	destroyed = false;
 	removeAllListeners = vi.fn(() => this);
 }
@@ -425,6 +430,70 @@ describe("EventManager Reconnection", () => {
 			expect(results).toEqual(["0.23.5", "0.23.5", "0.23.5"]);
 
 			await eventManager.stopMonitoring();
+		});
+	});
+
+	describe("Heartbeat", () => {
+		const startWithHeartbeat = async () => {
+			vi.useFakeTimers();
+			const mockConnection = new MockConnection();
+			vi.spyOn(connectionPool, "createDedicatedConnection").mockResolvedValue(
+				// biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
+				mockConnection as any,
+			);
+			emitter.on("error", () => {});
+			const eventManager = new EventManager(emitter, connectionPool, {
+				...config,
+				heartbeatInterval: 1000,
+				commandTimeout: 500,
+			});
+			await eventManager.startMonitoring();
+			mockConnection.socket.write.mockClear();
+			return { eventManager, socket: mockConnection.socket };
+		};
+
+		it("interrupts the idle and resumes it when MPD answers", async () => {
+			const { eventManager, socket } = await startWithHeartbeat();
+
+			await vi.advanceTimersByTimeAsync(1000);
+			expect(socket.write).toHaveBeenCalledWith(
+				"noidle\n",
+				"utf8",
+				expect.any(Function),
+			);
+			socket.emit("data", Buffer.from("OK\n"));
+			expect(socket.write).toHaveBeenLastCalledWith(
+				"idle\n",
+				"utf8",
+				expect.any(Function),
+			);
+
+			await vi.advanceTimersByTimeAsync(500);
+			expect(socket.destroy).not.toHaveBeenCalled();
+			await eventManager.stopMonitoring();
+		});
+
+		// Regression: an idle connection to a vanished peer stayed open forever,
+		// so the client never emitted "close" and was never replaced.
+		it("destroys the connection when MPD does not answer", async () => {
+			const { eventManager, socket } = await startWithHeartbeat();
+
+			await vi.advanceTimersByTimeAsync(1500);
+			expect(socket.destroy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					message: expect.stringContaining("heartbeat got no reply"),
+				}),
+			);
+			await eventManager.stopMonitoring();
+		});
+
+		it("stops probing after monitoring stops", async () => {
+			const { eventManager, socket } = await startWithHeartbeat();
+			await eventManager.stopMonitoring();
+			socket.write.mockClear();
+
+			await vi.advanceTimersByTimeAsync(5000);
+			expect(socket.write).not.toHaveBeenCalled();
 		});
 	});
 });

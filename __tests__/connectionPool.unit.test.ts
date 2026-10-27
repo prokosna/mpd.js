@@ -330,3 +330,99 @@ describe("ConnectionPool - MPD Process Death and Recovery", () => {
 		vi.useRealTimers();
 	});
 });
+
+describe("ConnectionPool - unresponsive peer", () => {
+	const handshake = async (
+		pool: ConnectionPool,
+	): Promise<
+		[Awaited<ReturnType<ConnectionPool["getConnection"]>>, SimpleMockSocket]
+	> => {
+		const promise = pool.getConnection();
+		await vi.advanceTimersByTimeAsync(1);
+		const socket = createdSockets[createdSockets.length - 1];
+		socket.simulateData(`${OK} MPD 0.24.0\n`);
+		return [await promise, socket];
+	};
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		createdSockets = [];
+		shouldFailNextConnection = false;
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	// Regression: a peer that vanished without FIN/RST kept every pooled
+	// connection busy forever and parked later callers indefinitely.
+	it("destroys a silent connection and hands its slot to a waiting caller", async () => {
+		const pool = new ConnectionPool({
+			host: "localhost",
+			port: 6600,
+			poolSize: 1,
+			commandTimeout: 1000,
+		});
+		const [connection, socket] = await handshake(pool);
+
+		const reader = connection.executeCommand("status").getReader();
+		const readResult = reader.read().catch((error: Error) => error);
+		const waiter = pool.getConnection();
+
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(socket.destroy).toHaveBeenCalled();
+		expect(((await readResult) as Error).message).toContain(
+			"No response from MPD within 1000ms",
+		);
+
+		await vi.advanceTimersByTimeAsync(1);
+		const newSocket = createdSockets[createdSockets.length - 1];
+		expect(newSocket).not.toBe(socket);
+		newSocket.simulateData(`${OK} MPD 0.24.0\n`);
+		expect(await waiter).not.toBe(connection);
+
+		await pool.disconnectAll();
+	});
+
+	it("keeps a connection that is still streaming data", async () => {
+		const pool = new ConnectionPool({
+			host: "localhost",
+			port: 6600,
+			poolSize: 3,
+			commandTimeout: 1000,
+		});
+		const [connection, socket] = await handshake(pool);
+
+		const reader = connection.executeCommand("listallinfo").getReader();
+		for (let i = 0; i < 5; i++) {
+			await vi.advanceTimersByTimeAsync(900);
+			socket.simulateData(`file: song${i}.flac\n`);
+		}
+		socket.simulateData(`${OK}\n`);
+		let lines = 0;
+		while (!(await reader.read()).done) lines++;
+
+		expect(lines).toBe(5);
+		expect(socket.destroy).not.toHaveBeenCalled();
+		await pool.disconnectAll();
+	});
+
+	it("does not time out an idle connection after its command finished", async () => {
+		const pool = new ConnectionPool({
+			host: "localhost",
+			port: 6600,
+			poolSize: 3,
+			commandTimeout: 1000,
+		});
+		const [connection, socket] = await handshake(pool);
+
+		const reader = connection.executeCommand("ping").getReader();
+		socket.simulateData(`${OK}\n`);
+		await reader.read();
+		await vi.advanceTimersByTimeAsync(5000);
+
+		expect(socket.destroy).not.toHaveBeenCalled();
+		await pool.disconnectAll();
+	});
+});
