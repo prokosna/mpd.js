@@ -5,6 +5,30 @@ Versioning follows [Semantic Versioning](https://semver.org/), and the
 git tag `vX.Y.Z` matches the `@prokosna/mpd3@X.Y.Z` published to the
 npm registry.
 
+## [2.1.0] - 2026-10-28
+
+### Fixed
+
+- **Hang when the server vanishes without closing the socket.** A
+  pooled connection waiting for a reply from a dead peer stayed busy
+  forever, so once every slot was taken all later commands queued
+  indefinitely without ever opening a new connection. A command that
+  receives no data for `commandTimeout` now destroys its connection
+  and rejects.
+- Callers waiting for a pool slot are now woken when a busy
+  connection closes; previously they waited forever.
+- The idle event connection is probed with `noidle` every
+  `heartbeatInterval`; a missing reply closes it and triggers the
+  usual reconnection, so `close` is eventually emitted for a dead
+  server.
+
+### Added
+
+- `commandTimeout` (default `30000`) and `heartbeatInterval`
+  (default `30000`) options. Both accept `0` to disable.
+- TCP keepalive is enabled by default (`keepAlive: true`,
+  `keepAliveInitialDelay: 10000`).
+
 ## [2.0.0] - 2026-05-01
 
 First release published to the npm registry, under the scoped name
